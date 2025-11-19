@@ -1,0 +1,60 @@
+================================================================================
+DATA SUMMARY REPORT
+================================================================================
+
+Dataset: Dataframe_first-sheet_cleaned.csv
+Generated: 2025-11-10 11:00:33.409604
+
+================================================================================
+OVERVIEW
+================================================================================
+Rows: 107
+Columns: 25
+
+================================================================================
+NUMERIC SUMMARY
+================================================================================
+       Attendance Days  Math Total Score  Arabic Reading Score  Arabic Exercises Score  Arabic Total Score  English Reading & Vocabulary Score  English Grammar Score  English Total Score   AVERAGE.1  English Total Score mapped  Arabic Total Score mapped  Math Total Score mapped  All Subjects Passed
+count       107.000000        107.000000            107.000000              107.000000          107.000000                          107.000000             107.000000           107.000000  107.000000                  107.000000                 107.000000               107.000000           107.000000
+mean         39.439252         15.644860              9.252336                7.738318           16.990654                            7.401869               7.224299            14.626168   78.769470                    0.887850                   0.962617                 0.943925             0.841121
+std           7.465869          4.510475              2.023883                2.266809            4.019986                            2.677156               2.717200             5.111074   16.528256                    0.317035                   0.190592                 0.231149             0.367283
+min          25.000000          0.000000              0.000000                0.000000            0.000000                            0.000000               0.000000             0.000000   16.666666                    0.000000                   0.000000                 0.000000             0.000000
+25%          33.000000         14.000000              9.500000                7.000000           16.000000                            7.000000               6.000000            13.000000   71.666668                    1.000000                   1.000000                 1.000000             1.000000
+50%          42.000000         17.000000             10.000000                8.000000           18.000000                            8.000000               8.000000            16.000000   83.333336                    1.000000                   1.000000                 1.000000             1.000000
+75%          45.000000         19.000000             10.000000               10.000000           20.000000                            9.500000               9.000000            18.000000   90.000000                    1.000000                   1.000000                 1.000000             1.000000
+max          50.000000         20.000000             10.000000               10.000000           20.000000                           10.000000              10.000000            20.000000  100.000000                    1.000000                   1.000000                 1.000000             1.000000
+
+================================================================================
+MISSING VALUES
+================================================================================
+No missing values found.
+
+
+================================================================================
+COLUMN TYPES
+================================================================================
+Gender                                    object
+TLS Name                                  object
+Transferred from Another TLS              object
+Attendance Days                            int64
+Disability or Chronic Illness             object
+First-Degree Relative Loss                object
+Math Total Score                           int64
+Math Level                                object
+Arabic Reading Score                       int64
+Arabic Reading Category                   object
+Arabic Exercises Score                     int64
+Arabic Level                              object
+Arabic Total Score                         int64
+English Reading & Vocabulary Score         int64
+English Reading & Vocabulary Category     object
+English Grammar Score                      int64
+English Level                             object
+English Total Score                        int64
+AVERAGE.1                                float64
+AVERAGE                                   object
+English Total Score mapped                  int8
+Arabic Total Score mapped                   int8
+Math Total Score mapped                     int8
+Location                                  object
+All Subjects Passed                         int8

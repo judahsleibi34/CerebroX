@@ -1,0 +1,1044 @@
+
+====================================================================================================
+Logging started at 2025-11-10_11-19-55
+====================================================================================================
+
+
+====================================================================================================
+Dataset Loading
+====================================================================================================
+
+====================================================================================================
+File loaded. Found 1 sheets: ['Sheet1']
+------------------------------------------------------------
+Processing sheet: Sheet1
+Using configured name: Dataframe_first-sheet.csv
+✓ Saved Dataframe_first-sheet\Dataframe_first-sheet.csv (rows=111, cols=26)
+====================================================================================================
+All sheets processed and saved to Seventh Grade.csv
+✓ Dataset loaded successfully
+
+====================================================================================================
+PROCESSING: Sheet1 (Dataframe_first-sheet.csv)
+====================================================================================================
+
+
+====================================================================================================
+Dataset Cleaning 
+====================================================================================================
+
+====================================================================================================
+Data loaded successfully
+Shape: (111, 26)
+Columns: 26
+====================================================================================================
+
+====================================================================================================
+STARTING COLUMN RENAME PROCESS
+====================================================================================================
+
+Original columns (26):
+  1. 'Sheet'
+  2. 'Full Name of the Student / أحمد خالد سالم ابو نمر'
+  3. 'Gender / male'
+  4. 'Date of Birth / 2012-04-19'
+  5. 'TLS / مركز صناع الامل'
+  6. 'Did the student transfer from another TLS / نعم'
+  7. 'Approximate Number of Attendance Days / 30'
+  8. 'Any Disability/Injury/Chronic Illness / لا'
+  9. 'Has the student lost a first-degree relative (mother, father, sibling, other / لا'
+  10. 'math / 18'
+  11. 'math 7 th / Excellent'
+  12. 'math 100% / 90'
+  13. 'arabic Reading and  Comprehension / 7'
+  14. 'Reading and  Comprehension Classification / proficient'
+  15. 'arabic  Language Exercises / 7'
+  16. 'arabicLanguage Exercises Classification / proficient'
+  17. 'Total Score in Arabic Language / 14'
+  18. 'arabic 100% / 70'
+  19. 'Reading  comprehesion & vocabulary / 6'
+  20. 'English   Reading  comprehesion & vocabulary / proficient'
+  21. 'English   Grammar / 5'
+  22. 'Language Classification / Developing'
+  23. 'Total Score in English Language / 11'
+  24. 'english 100% / 55.00000000000001'
+  25. 'AVERAGE.1 / 71.66666666666667'
+  26. 'AVERAGE / Advanced'
+
+=== HEADER NORMALIZATION ===
+  'Full Name of the Student / أحمد خالد سالم ابو نمر' -> 'Full Name of the Student'
+  'Gender / male' -> 'Gender'
+  'Date of Birth / 2012-04-19' -> 'Date of Birth'
+  'TLS / مركز صناع الامل' -> 'TLS'
+  'Did the student transfer from another TLS / نعم' -> 'Did the student transfer from another TLS'
+  'Approximate Number of Attendance Days / 30' -> 'Approximate Number of Attendance Days'
+  'Any Disability/Injury/Chronic Illness / لا' -> 'Any Disability/Injury/Chronic Illness'
+  'Has the student lost a first-degree relative (mother, father, sibling, other / لا' -> 'Has the student lost a first-degree relative (mother, father, sibling, other'
+  'math / 18' -> 'math'
+  'math 7 th / Excellent' -> 'math 7 th'
+  'math 100% / 90' -> 'math 100%'
+  'arabic Reading and  Comprehension / 7' -> 'arabic Reading and Comprehension'
+  'Reading and  Comprehension Classification / proficient' -> 'Reading and Comprehension Classification'
+  'arabic  Language Exercises / 7' -> 'arabic Language Exercises'
+  'arabicLanguage Exercises Classification / proficient' -> 'arabicLanguage Exercises Classification'
+  'Total Score in Arabic Language / 14' -> 'Total Score in Arabic Language'
+  'arabic 100% / 70' -> 'arabic 100%'
+  'Reading  comprehesion & vocabulary / 6' -> 'Reading comprehesion & vocabulary'
+  'English   Reading  comprehesion & vocabulary / proficient' -> 'English Reading comprehesion & vocabulary'
+  'English   Grammar / 5' -> 'English Grammar'
+  'Language Classification / Developing' -> 'Language Classification'
+  'Total Score in English Language / 11' -> 'Total Score in English Language'
+  'english 100% / 55.00000000000001' -> 'english 100%'
+  'AVERAGE.1 / 71.66666666666667' -> 'AVERAGE.1'
+  'AVERAGE / Advanced' -> 'AVERAGE'
+
+=== COLUMN MAPPING PROCESS ===
+Available mappings in COLUMN_NAME_MAP: 28
+
+✓ Column 'Sheet' -> 'Sheet'
+✓ Column 'Full Name of the Student' -> 'Student Full Name'
+✓ Column 'Gender' -> 'Gender'
+✓ Column 'Date of Birth' -> 'Date of Birth'
+✓ Column 'TLS' -> 'TLS Name'
+✓ Column 'Did the student transfer from another TLS' -> 'Transferred from Another TLS'
+✓ Column 'Approximate Number of Attendance Days' -> 'Attendance Days'
+✓ Column 'Any Disability/Injury/Chronic Illness' -> 'Disability or Chronic Illness'
+✓ Column 'Has the student lost a first-degree relative (mother, father, sibling, other' -> 'First-Degree Relative Loss'
+✓ Column 'math' -> 'Math Total Score'
+✓ Column 'math 7 th' -> 'Math Level'
+✓ Column 'math 100%' -> 'Math Total Score as (%)'
+✓ Column 'arabic Reading and Comprehension' -> 'Arabic Reading Score'
+✓ Column 'Reading and Comprehension Classification' -> 'Arabic Reading Category'
+✓ Column 'arabic Language Exercises' -> 'Arabic Exercises Score'
+✓ Column 'arabicLanguage Exercises Classification' -> 'Arabic Level'
+✓ Column 'Total Score in Arabic Language' -> 'Arabic Total Score'
+✓ Column 'arabic 100%' -> 'Arabic Total Score as (%)'
+✓ Column 'Reading comprehesion & vocabulary' -> 'English Reading & Vocabulary Score'
+✓ Column 'English Reading comprehesion & vocabulary' -> 'English Reading & Vocabulary Category'
+✓ Column 'English Grammar' -> 'English Grammar Score'
+✓ Column 'Language Classification' -> 'English Level'
+✓ Column 'Total Score in English Language' -> 'English Total Score'
+✓ Column 'english 100%' -> 'English Total Score as (%)'
+✗ Column 'AVERAGE.1' -> NO MAPPING FOUND
+✗ Column 'AVERAGE' -> NO MAPPING FOUND
+
+✓ Successfully renamed 24 columns
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+WARNING: 2 columns have NO mapping:
+  - 'AVERAGE.1'
+  - 'AVERAGE'
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
+====================================================================================================
+FINAL COLUMN NAMES AFTER RENAMING:
+====================================================================================================
+  1. 'Sheet' (unchanged)
+  2. 'Student Full Name' (was: 'Full Name of the Student / أحمد خالد سالم ابو نمر')
+  3. 'Gender' (was: 'Gender / male')
+  4. 'Date of Birth' (was: 'Date of Birth / 2012-04-19')
+  5. 'TLS Name' (was: 'TLS / مركز صناع الامل')
+  6. 'Transferred from Another TLS' (was: 'Did the student transfer from another TLS / نعم')
+  7. 'Attendance Days' (was: 'Approximate Number of Attendance Days / 30')
+  8. 'Disability or Chronic Illness' (was: 'Any Disability/Injury/Chronic Illness / لا')
+  9. 'First-Degree Relative Loss' (was: 'Has the student lost a first-degree relative (mother, father, sibling, other / لا')
+  10. 'Math Total Score' (was: 'math / 18')
+  11. 'Math Level' (was: 'math 7 th / Excellent')
+  12. 'Math Total Score as (%)' (was: 'math 100% / 90')
+  13. 'Arabic Reading Score' (was: 'arabic Reading and  Comprehension / 7')
+  14. 'Arabic Reading Category' (was: 'Reading and  Comprehension Classification / proficient')
+  15. 'Arabic Exercises Score' (was: 'arabic  Language Exercises / 7')
+  16. 'Arabic Level' (was: 'arabicLanguage Exercises Classification / proficient')
+  17. 'Arabic Total Score' (was: 'Total Score in Arabic Language / 14')
+  18. 'Arabic Total Score as (%)' (was: 'arabic 100% / 70')
+  19. 'English Reading & Vocabulary Score' (was: 'Reading  comprehesion & vocabulary / 6')
+  20. 'English Reading & Vocabulary Category' (was: 'English   Reading  comprehesion & vocabulary / proficient')
+  21. 'English Grammar Score' (was: 'English   Grammar / 5')
+  22. 'English Level' (was: 'Language Classification / Developing')
+  23. 'English Total Score' (was: 'Total Score in English Language / 11')
+  24. 'English Total Score as (%)' (was: 'english 100% / 55.00000000000001')
+  25. 'AVERAGE.1' (was: 'AVERAGE.1 / 71.66666666666667')
+  26. 'AVERAGE' (was: 'AVERAGE / Advanced')
+
+✓ Renamed DataFrame saved as: Dataframe_first-sheet\Dataframe_first-sheet_renamed.csv
+====================================================================================================
+
+
+====================================================================================================
+DATA INVESTIGATION
+====================================================================================================
+<class 'pandas.core.frame.DataFrame'>
+RangeIndex: 111 entries, 0 to 110
+Data columns (total 26 columns):
+ #   Column                                 Non-Null Count  Dtype  
+---  ------                                 --------------  -----  
+ 0   Sheet                                  111 non-null    object 
+ 1   Student Full Name                      111 non-null    object 
+ 2   Gender                                 111 non-null    object 
+ 3   Date of Birth                          111 non-null    object 
+ 4   TLS Name                               111 non-null    object 
+ 5   Transferred from Another TLS           111 non-null    object 
+ 6   Attendance Days                        111 non-null    int64  
+ 7   Disability or Chronic Illness          111 non-null    object 
+ 8   First-Degree Relative Loss             111 non-null    object 
+ 9   Math Total Score                       111 non-null    int64  
+ 10  Math Level                             111 non-null    object 
+ 11  Math Total Score as (%)                111 non-null    float64
+ 12  Arabic Reading Score                   111 non-null    int64  
+ 13  Arabic Reading Category                111 non-null    object 
+ 14  Arabic Exercises Score                 111 non-null    int64  
+ 15  Arabic Level                           111 non-null    object 
+ 16  Arabic Total Score                     111 non-null    int64  
+ 17  Arabic Total Score as (%)              111 non-null    float64
+ 18  English Reading & Vocabulary Score     111 non-null    int64  
+ 19  English Reading & Vocabulary Category  111 non-null    object 
+ 20  English Grammar Score                  111 non-null    int64  
+ 21  English Level                          111 non-null    object 
+ 22  English Total Score                    111 non-null    int64  
+ 23  English Total Score as (%)             111 non-null    float64
+ 24  AVERAGE.1                              111 non-null    float64
+ 25  AVERAGE                                111 non-null    object 
+dtypes: float64(4), int64(8), object(14)
+memory usage: 22.7+ KB
+
+--- Column: 'Sheet' ---
+Type: Categorical/Object
+Unique values: 1
+Duplicates: 110
+Missing: 0
+All unique values:
+  - Sheet1
+------------------------------------------------------------
+
+--- Column: 'Student Full Name' ---
+Type: Categorical/Object
+Unique values: 109
+Duplicates: 2
+Missing: 0
+Unique values (first 20 of 109):
+  - لانا محمد فريد بربخ
+  - أسماء اياد زياد حميد
+  - ألمى محمد خالد الجبور
+  - أمجد توفيق جدوع الكرد
+  - ابراهيم انور علي ابو عبيده
+  - احمد عادل ابراهيم ابو هده
+  - امير محمد بسام حدايد
+  - انس يوسف عرفات عاشور
+  - بيسان رائد فايز ابو عكر
+  - بيسان عبدالله فرحان ابو جليدان
+  - تقى هاني اسعد الخطيب
+  - جودي مدحت محمود ابو ديه
+  - حسن محمود حسن حلس
+  - حمزه حاتم ماهر القدره
+  - خليل محمد خليل عرام
+  - رؤى كمال أحمد مسمح
+  - راما سامي نواف ابو جزر
+  - رهف حسن عرفات عاشور
+  - سما محمد أحمد جودة
+  - سهر عدلي ماجد دحلان
+------------------------------------------------------------
+
+--- Column: 'Gender' ---
+Type: Categorical/Object
+Unique values: 2
+Duplicates: 109
+Missing: 0
+All unique values:
+  - male
+  - Female
+------------------------------------------------------------
+
+--- Column: 'Date of Birth' ---
+Type: Categorical/Object
+Unique values: 103
+Duplicates: 8
+Missing: 0
+Unique values (first 20 of 103):
+  - 2012-04-22
+  - 2012-09-12
+  - 2012-08-21
+  - 2012-03-24
+  - 2012-02-14
+  - 2012-09-25
+  - 2012-10-30
+  - 2012-05-17
+  - 2012-10-14
+  - 2012-09-09
+  - 2012-05-19
+  - 2012-08-18
+  - 2012-09-01
+  - 2012-05-14
+  - 2012-12-19
+  - 2012-07-26
+  - 2012-01-21
+  - 2012-05-01
+  - 2012-12-07
+  - 2012-11-02
+------------------------------------------------------------
+
+--- Column: 'TLS Name' ---
+Type: Categorical/Object
+Unique values: 3
+Duplicates: 108
+Missing: 0
+All unique values:
+  - مركز صناع الامل
+  - زهرات المدينة 
+  - مركز البراق التعليمي
+------------------------------------------------------------
+
+--- Column: 'Transferred from Another TLS' ---
+Type: Categorical/Object
+Unique values: 3
+Duplicates: 108
+Missing: 0
+All unique values:
+  - لا
+  - نعم
+  - لا 
+------------------------------------------------------------
+
+--- Column: 'Attendance Days' ---
+Type: Numeric
+Missing: 0
+Duplicates: 95
+Statistics:
+count    111.000000
+mean      39.423423
+std        7.474258
+min       25.000000
+25%       33.000000
+50%       42.000000
+75%       45.000000
+max       50.000000
+Name: Attendance Days, dtype: float64
+------------------------------------------------------------
+
+--- Column: 'Disability or Chronic Illness' ---
+Type: Categorical/Object
+Unique values: 2
+Duplicates: 109
+Missing: 0
+All unique values:
+  - لا
+  - لا 
+------------------------------------------------------------
+
+--- Column: 'First-Degree Relative Loss' ---
+Type: Categorical/Object
+Unique values: 3
+Duplicates: 108
+Missing: 0
+All unique values:
+  - لا
+  - نعم /الاب
+  - لا 
+------------------------------------------------------------
+
+--- Column: 'Math Total Score' ---
+Type: Numeric
+Missing: 0
+Duplicates: 98
+Statistics:
+count    111.000000
+mean      15.756757
+std        4.470542
+min        0.000000
+25%       14.000000
+50%       17.000000
+75%       19.000000
+max       20.000000
+Name: Math Total Score, dtype: float64
+------------------------------------------------------------
+
+--- Column: 'Math Level' ---
+Type: Categorical/Object
+Unique values: 4
+Duplicates: 107
+Missing: 0
+All unique values:
+  - Beginning
+  - proficient
+  - Excellent
+  - Developing
+------------------------------------------------------------
+
+--- Column: 'Math Total Score as (%)' ---
+Type: Numeric
+Missing: 0
+Duplicates: 98
+Statistics:
+count    111.000000
+mean      78.783784
+std       22.352712
+min        0.000000
+25%       70.000000
+50%       85.000000
+75%       95.000000
+max      100.000000
+Name: Math Total Score as (%), dtype: float64
+------------------------------------------------------------
+
+--- Column: 'Arabic Reading Score' ---
+Type: Numeric
+Missing: 0
+Duplicates: 105
+Statistics:
+count    111.000000
+mean       9.252252
+std        2.002128
+min        0.000000
+25%        9.500000
+50%       10.000000
+75%       10.000000
+max       10.000000
+Name: Arabic Reading Score, dtype: float64
+------------------------------------------------------------
+
+--- Column: 'Arabic Reading Category' ---
+Type: Categorical/Object
+Unique values: 4
+Duplicates: 107
+Missing: 0
+All unique values:
+  - Excellent
+  - Developing
+  - proficient
+  - Beginning
+------------------------------------------------------------
+
+--- Column: 'Arabic Exercises Score' ---
+Type: Numeric
+Missing: 0
+Duplicates: 102
+Statistics:
+count    111.000000
+mean       7.747748
+std        2.274237
+min        0.000000
+25%        7.000000
+50%        8.000000
+75%       10.000000
+max       10.000000
+Name: Arabic Exercises Score, dtype: float64
+------------------------------------------------------------
+
+--- Column: 'Arabic Level' ---
+Type: Categorical/Object
+Unique values: 4
+Duplicates: 107
+Missing: 0
+All unique values:
+  - Excellent
+  - Developing
+  - proficient
+  - Beginning
+------------------------------------------------------------
+
+--- Column: 'Arabic Total Score' ---
+Type: Numeric
+Missing: 0
+Duplicates: 99
+Statistics:
+count    111.000000
+mean      17.000000
+std        4.009081
+min        0.000000
+25%       16.000000
+50%       18.000000
+75%       20.000000
+max       20.000000
+Name: Arabic Total Score, dtype: float64
+------------------------------------------------------------
+
+--- Column: 'Arabic Total Score as (%)' ---
+Type: Numeric
+Missing: 0
+Duplicates: 99
+Statistics:
+count    111.000000
+mean      85.000000
+std       20.045403
+min        0.000000
+25%       80.000000
+50%       90.000000
+75%      100.000000
+max      100.000000
+Name: Arabic Total Score as (%), dtype: float64
+------------------------------------------------------------
+
+--- Column: 'English Reading & Vocabulary Score' ---
+Type: Numeric
+Missing: 0
+Duplicates: 101
+Statistics:
+count    111.000000
+mean       7.459459
+std        2.651873
+min        0.000000
+25%        7.000000
+50%        8.000000
+75%       10.000000
+max       10.000000
+Name: English Reading & Vocabulary Score, dtype: float64
+------------------------------------------------------------
+
+--- Column: 'English Reading & Vocabulary Category' ---
+Type: Categorical/Object
+Unique values: 4
+Duplicates: 107
+Missing: 0
+All unique values:
+  - Beginning
+  - proficient
+  - Developing
+  - Excellent
+------------------------------------------------------------
+
+--- Column: 'English Grammar Score' ---
+Type: Numeric
+Missing: 0
+Duplicates: 101
+Statistics:
+count    111.000000
+mean       7.288288
+std        2.691358
+min        0.000000
+25%        6.000000
+50%        8.000000
+75%        9.000000
+max       10.000000
+Name: English Grammar Score, dtype: float64
+------------------------------------------------------------
+
+--- Column: 'English Level' ---
+Type: Categorical/Object
+Unique values: 4
+Duplicates: 107
+Missing: 0
+All unique values:
+  - Beginning
+  - Developing
+  - Excellent
+  - proficient
+------------------------------------------------------------
+
+--- Column: 'English Total Score' ---
+Type: Numeric
+Missing: 0
+Duplicates: 95
+Statistics:
+count    111.000000
+mean      14.747748
+std        5.065872
+min        0.000000
+25%       13.000000
+50%       16.000000
+75%       18.000000
+max       20.000000
+Name: English Total Score, dtype: float64
+------------------------------------------------------------
+
+--- Column: 'English Total Score as (%)' ---
+Type: Numeric
+Missing: 0
+Duplicates: 95
+Statistics:
+count    111.000000
+mean      73.738739
+std       25.329362
+min        0.000000
+25%       65.000000
+50%       80.000000
+75%       90.000000
+max      100.000000
+Name: English Total Score as (%), dtype: float64
+------------------------------------------------------------
+
+--- Column: 'AVERAGE.1' ---
+Type: Numeric
+Missing: 0
+Duplicates: 79
+Statistics:
+count    111.000000
+mean      79.174174
+std       16.454519
+min       16.666667
+25%       73.333333
+50%       83.333333
+75%       90.833333
+max      100.000000
+Name: AVERAGE.1, dtype: float64
+------------------------------------------------------------
+
+--- Column: 'AVERAGE' ---
+Type: Categorical/Object
+Unique values: 4
+Duplicates: 107
+Missing: 0
+All unique values:
+  - Beginning
+  - Developing
+  - Advanced
+  - Excellent
+------------------------------------------------------------
+
+====================================================================================================
+DATA CLEANING PROCESS
+====================================================================================================
+
+DataFrame info before cleaning:
+<class 'pandas.core.frame.DataFrame'>
+RangeIndex: 111 entries, 0 to 110
+Data columns (total 26 columns):
+ #   Column                                 Non-Null Count  Dtype  
+---  ------                                 --------------  -----  
+ 0   Sheet                                  111 non-null    object 
+ 1   Student Full Name                      111 non-null    object 
+ 2   Gender                                 111 non-null    object 
+ 3   Date of Birth                          111 non-null    object 
+ 4   TLS Name                               111 non-null    object 
+ 5   Transferred from Another TLS           111 non-null    object 
+ 6   Attendance Days                        111 non-null    int8   
+ 7   Disability or Chronic Illness          111 non-null    object 
+ 8   First-Degree Relative Loss             111 non-null    object 
+ 9   Math Total Score                       111 non-null    int8   
+ 10  Math Level                             111 non-null    object 
+ 11  Math Total Score as (%)                111 non-null    float32
+ 12  Arabic Reading Score                   111 non-null    int8   
+ 13  Arabic Reading Category                111 non-null    object 
+ 14  Arabic Exercises Score                 111 non-null    int8   
+ 15  Arabic Level                           111 non-null    object 
+ 16  Arabic Total Score                     111 non-null    int8   
+ 17  Arabic Total Score as (%)              111 non-null    float32
+ 18  English Reading & Vocabulary Score     111 non-null    int8   
+ 19  English Reading & Vocabulary Category  111 non-null    object 
+ 20  English Grammar Score                  111 non-null    int8   
+ 21  English Level                          111 non-null    object 
+ 22  English Total Score                    111 non-null    int8   
+ 23  English Total Score as (%)             111 non-null    float32
+ 24  AVERAGE.1                              111 non-null    float32
+ 25  AVERAGE                                111 non-null    object 
+dtypes: float32(4), int8(8), object(14)
+memory usage: 14.9+ KB
+None
+
+✓ Dropped columns: ['Student Full Name', 'Date of Birth', 'Sheet', 'English Total Score as (%)', 'Arabic Total Score as (%)', 'Math Total Score as (%)']
+
+Normalizing 11 object columns...
+
+=== APPLYING VALUE MAPPINGS ===
+Value mappings defined for 11 columns
+
+✓ Column 'Gender' found
+  Applying 2 value mappings...
+  Original unique values (2):
+    - 'male'
+    - 'Female'
+  New unique values (2):
+    - 'Male'
+    - 'Female'
+
+✓ Column 'TLS Name' found
+  Applying 3 value mappings...
+  Original unique values (3):
+    - 'مركز صناع الامل'
+    - 'زهرات المدينه'
+    - 'مركز البراق التعليمي'
+  New unique values (3):
+    - 'Sonna' Al Ebtisama'
+    - 'Zahrat Al-Madina'
+    - 'Al-Buraq Center'
+
+✓ Column 'Transferred from Another TLS' found
+  Applying 3 value mappings...
+  Original unique values (2):
+    - 'لا'
+    - 'نعم'
+  New unique values (2):
+    - 'No'
+    - 'Yes'
+
+✓ Column 'Disability or Chronic Illness' found
+  Applying 3 value mappings...
+  Original unique values (1):
+    - 'لا'
+  New unique values (1):
+    - 'No'
+
+✓ Column 'First-Degree Relative Loss' found
+  Applying 3 value mappings...
+  Original unique values (2):
+    - 'لا'
+    - 'نعم /الاب'
+  New unique values (2):
+    - 'No loss'
+    - 'Father lost'
+
+✓ Column 'Math Level' found
+  Applying 4 value mappings...
+  Original unique values (4):
+    - 'Beginning'
+    - 'proficient'
+    - 'Excellent'
+    - 'Developing'
+  New unique values (4):
+    - 'Level 1'
+    - 'Level 3'
+    - 'Level 4'
+    - 'Level 2'
+
+✓ Column 'Arabic Level' found
+  Applying 4 value mappings...
+  Original unique values (4):
+    - 'Excellent'
+    - 'Developing'
+    - 'proficient'
+    - 'Beginning'
+  New unique values (4):
+    - 'Level 4'
+    - 'Level 2'
+    - 'Level 3'
+    - 'Level 1'
+
+✓ Column 'Arabic Reading Category' found
+  Applying 4 value mappings...
+  Original unique values (4):
+    - 'Excellent'
+    - 'Developing'
+    - 'proficient'
+    - 'Beginning'
+  New unique values (4):
+    - 'Level 4'
+    - 'Level 2'
+    - 'Level 3'
+    - 'Level 1'
+
+✓ Column 'English Reading & Vocabulary Category' found
+  Applying 4 value mappings...
+  Original unique values (4):
+    - 'Beginning'
+    - 'proficient'
+    - 'Developing'
+    - 'Excellent'
+  New unique values (4):
+    - 'Level 1'
+    - 'Level 3'
+    - 'Level 2'
+    - 'Level 4'
+
+✓ Column 'English Level' found
+  Applying 4 value mappings...
+  Original unique values (4):
+    - 'Beginning'
+    - 'Developing'
+    - 'Excellent'
+    - 'proficient'
+  New unique values (4):
+    - 'Level 1'
+    - 'Level 2'
+    - 'Level 4'
+    - 'Level 3'
+
+✗ Column 'Average Category' NOT FOUND in DataFrame
+  Available columns containing similar text:
+    - 'Arabic Reading Category'
+    - 'English Reading & Vocabulary Category'
+    - 'AVERAGE.1'
+    - 'AVERAGE'
+
+✓ Successfully applied value mappings to 10 columns
+====================================================================================================
+
+✓ Removed 4 duplicate rows
+
+=== MISSING VALUES SUMMARY ===
+No missing values!
+
+====================================================================================================
+✓ Cleaned dataframe saved as: Dataframe_first-sheet\Dataframe_first-sheet_cleaned.csv
+====================================================================================================
+
+Cleaned dataframe info:
+<class 'pandas.core.frame.DataFrame'>
+Index: 107 entries, 0 to 110
+Data columns (total 20 columns):
+ #   Column                                 Non-Null Count  Dtype  
+---  ------                                 --------------  -----  
+ 0   Gender                                 107 non-null    object 
+ 1   TLS Name                               107 non-null    object 
+ 2   Transferred from Another TLS           107 non-null    object 
+ 3   Attendance Days                        107 non-null    int8   
+ 4   Disability or Chronic Illness          107 non-null    object 
+ 5   First-Degree Relative Loss             107 non-null    object 
+ 6   Math Total Score                       107 non-null    int8   
+ 7   Math Level                             107 non-null    object 
+ 8   Arabic Reading Score                   107 non-null    int8   
+ 9   Arabic Reading Category                107 non-null    object 
+ 10  Arabic Exercises Score                 107 non-null    int8   
+ 11  Arabic Level                           107 non-null    object 
+ 12  Arabic Total Score                     107 non-null    int8   
+ 13  English Reading & Vocabulary Score     107 non-null    int8   
+ 14  English Reading & Vocabulary Category  107 non-null    object 
+ 15  English Grammar Score                  107 non-null    int8   
+ 16  English Level                          107 non-null    object 
+ 17  English Total Score                    107 non-null    int8   
+ 18  AVERAGE.1                              107 non-null    float32
+ 19  AVERAGE                                107 non-null    object 
+dtypes: float32(1), int8(8), object(11)
+memory usage: 11.3+ KB
+None
+====================================================================================================
+✓ Cleaned file saved: Dataframe_first-sheet\Dataframe_first-sheet_cleaned.csv
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+Threshold: 10/20
+────────────────────────────────────────────────────────────────────────────────────────────────────
+====================================================================================================
+Data maping in progres
+====================================================================================================
+Data maping done
+====================================================================================================
+<class 'pandas.core.frame.DataFrame'>
+RangeIndex: 107 entries, 0 to 106
+Data columns (total 23 columns):
+ #   Column                                 Non-Null Count  Dtype  
+---  ------                                 --------------  -----  
+ 0   Gender                                 107 non-null    object 
+ 1   TLS Name                               107 non-null    object 
+ 2   Transferred from Another TLS           107 non-null    object 
+ 3   Attendance Days                        107 non-null    int64  
+ 4   Disability or Chronic Illness          107 non-null    object 
+ 5   First-Degree Relative Loss             107 non-null    object 
+ 6   Math Total Score                       107 non-null    int64  
+ 7   Math Level                             107 non-null    object 
+ 8   Arabic Reading Score                   107 non-null    int64  
+ 9   Arabic Reading Category                107 non-null    object 
+ 10  Arabic Exercises Score                 107 non-null    int64  
+ 11  Arabic Level                           107 non-null    object 
+ 12  Arabic Total Score                     107 non-null    int64  
+ 13  English Reading & Vocabulary Score     107 non-null    int64  
+ 14  English Reading & Vocabulary Category  107 non-null    object 
+ 15  English Grammar Score                  107 non-null    int64  
+ 16  English Level                          107 non-null    object 
+ 17  English Total Score                    107 non-null    int64  
+ 18  AVERAGE.1                              107 non-null    float64
+ 19  AVERAGE                                107 non-null    object 
+ 20  English Total Score mapped             107 non-null    int8   
+ 21  Arabic Total Score mapped              107 non-null    int8   
+ 22  Math Total Score mapped                107 non-null    int8   
+dtypes: float64(1), int64(8), int8(3), object(11)
+memory usage: 17.2+ KB
+None
+====================================================================================================
+====================================================================================================
+Per-subject success rates by location:
+
+Subject: English Total Score
+             TLS Name  n_students  pass_count  mean_score  pass_rate_pct
+0     Al-Buraq Center          27          25       16.44          92.59
+1  Sonna' Al Ebtisama          48          41       13.00          85.42
+2    Zahrat Al-Madina          32          29       15.53          90.62
+
+Subject: Arabic Total Score
+             TLS Name  n_students  pass_count  mean_score  pass_rate_pct
+0     Al-Buraq Center          27          24       15.11          88.89
+1  Sonna' Al Ebtisama          48          48       17.71         100.00
+2    Zahrat Al-Madina          32          31       17.50          96.88
+
+Subject: Math Total Score
+             TLS Name  n_students  pass_count  mean_score  pass_rate_pct
+0     Al-Buraq Center          27          24       12.96          88.89
+1  Sonna' Al Ebtisama          48          46       15.81          95.83
+2    Zahrat Al-Madina          32          31       17.66          96.88
+====================================================================================================
+Overall success rates by location:
+             TLS Name  English Total Score mapped %  Arabic Total Score mapped %  Math Total Score mapped %
+0     Al-Buraq Center                         92.59                        88.89                      88.89
+1  Sonna' Al Ebtisama                         85.42                       100.00                      95.83
+2    Zahrat Al-Madina                         90.62                        96.88                      96.88
+====================================================================================================
+
+====================================================================================================
+SUCCESS RATES @ Threshold ≥ 10 / 20
+====================================================================================================
+
+Subject: English Total Score
+             TLS Name  n_students  pass_count  mean_score  pass_rate_pct
+0     Al-Buraq Center          27          25       16.44          92.59
+1  Sonna' Al Ebtisama          48          41       13.00          85.42
+2    Zahrat Al-Madina          32          29       15.53          90.62
+
+Subject: Arabic Total Score
+             TLS Name  n_students  pass_count  mean_score  pass_rate_pct
+0     Al-Buraq Center          27          24       15.11          88.89
+1  Sonna' Al Ebtisama          48          48       17.71         100.00
+2    Zahrat Al-Madina          32          31       17.50          96.88
+
+Subject: Math Total Score
+             TLS Name  n_students  pass_count  mean_score  pass_rate_pct
+0     Al-Buraq Center          27          24       12.96          88.89
+1  Sonna' Al Ebtisama          48          46       15.81          95.83
+2    Zahrat Al-Madina          32          31       17.66          96.88
+
+Overall Success by Location:
+             TLS Name  English Total Score mapped %  Arabic Total Score mapped %  Math Total Score mapped %
+0     Al-Buraq Center                         92.59                        88.89                      88.89
+1  Sonna' Al Ebtisama                         85.42                       100.00                      95.83
+2    Zahrat Al-Madina                         90.62                        96.88                      96.88
+====================================================================================================
+
+
+====================================================================================================
+GENERATING ALL VISUALIZATIONS FOR Sheet1
+====================================================================================================
+
+
+ Plotting Score Distributions
+✓ Loaded 107 rows from Dataframe_first-sheet_cleaned.csv
+✓ Created histogram for English Total Score
+✓ Created histogram for Arabic Total Score
+✓ Created histogram for Math Total Score
+
+ Plotting Univariate Scatter Distributions
+✓ Loaded 107 rows from Dataframe_first-sheet_cleaned.csv
+✓ Created univariate scatter for English Total Score
+✓ Created univariate scatter for Arabic Total Score
+✓ Created univariate scatter for Math Total Score
+
+ Plotting Box Plots
+✓ Loaded 107 rows from Dataframe_first-sheet_cleaned.csv
+✓ Created box plot for English Total Score
+✓ Created box plot for Arabic Total Score
+✓ Created box plot for Math Total Score
+
+ Plotting Pie Charts
+✓ Loaded 107 rows from Dataframe_first-sheet_cleaned.csv
+✓ Created pie chart for TLS Name
+✓ Created pie chart for Gender
+✓ Created pie chart for Math Level
+✓ Created pie chart for Arabic Reading Category
+✓ Created pie chart for English Reading & Vocabulary Category
+
+ Plotting Correlation Heatmap
+✓ Loaded 107 rows from Dataframe_first-sheet_cleaned.csv
+✓ Created correlation heatmap
+
+ Exporting Summary Reports
+✓ Loaded 107 rows from Dataframe_first-sheet_cleaned.csv
+✓ Summary report saved: Dataframe_first-sheet\summary_report_Sheet1.txt
+✓ Summary report exported: Dataframe_first-sheet\summary_report_Sheet1.txt
+
+✓ All visualizations completed for Sheet1
+
+ Plotting Success Rates
+✓ Created success rate chart for threshold 10
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+Threshold: 15/20
+────────────────────────────────────────────────────────────────────────────────────────────────────
+====================================================================================================
+Data maping in progres
+====================================================================================================
+Data maping done
+====================================================================================================
+<class 'pandas.core.frame.DataFrame'>
+RangeIndex: 107 entries, 0 to 106
+Data columns (total 23 columns):
+ #   Column                                 Non-Null Count  Dtype  
+---  ------                                 --------------  -----  
+ 0   Gender                                 107 non-null    object 
+ 1   TLS Name                               107 non-null    object 
+ 2   Transferred from Another TLS           107 non-null    object 
+ 3   Attendance Days                        107 non-null    int64  
+ 4   Disability or Chronic Illness          107 non-null    object 
+ 5   First-Degree Relative Loss             107 non-null    object 
+ 6   Math Total Score                       107 non-null    int64  
+ 7   Math Level                             107 non-null    object 
+ 8   Arabic Reading Score                   107 non-null    int64  
+ 9   Arabic Reading Category                107 non-null    object 
+ 10  Arabic Exercises Score                 107 non-null    int64  
+ 11  Arabic Level                           107 non-null    object 
+ 12  Arabic Total Score                     107 non-null    int64  
+ 13  English Reading & Vocabulary Score     107 non-null    int64  
+ 14  English Reading & Vocabulary Category  107 non-null    object 
+ 15  English Grammar Score                  107 non-null    int64  
+ 16  English Level                          107 non-null    object 
+ 17  English Total Score                    107 non-null    int64  
+ 18  AVERAGE.1                              107 non-null    float64
+ 19  AVERAGE                                107 non-null    object 
+ 20  English Total Score mapped             107 non-null    int8   
+ 21  Arabic Total Score mapped              107 non-null    int8   
+ 22  Math Total Score mapped                107 non-null    int8   
+dtypes: float64(1), int64(8), int8(3), object(11)
+memory usage: 17.2+ KB
+None
+====================================================================================================
+====================================================================================================
+Per-subject success rates by location:
+
+Subject: English Total Score
+             TLS Name  n_students  pass_count  mean_score  pass_rate_pct
+0     Al-Buraq Center          27          21       16.44          77.78
+1  Sonna' Al Ebtisama          48          22       13.00          45.83
+2    Zahrat Al-Madina          32          25       15.53          78.12
+
+Subject: Arabic Total Score
+             TLS Name  n_students  pass_count  mean_score  pass_rate_pct
+0     Al-Buraq Center          27          20       15.11          74.07
+1  Sonna' Al Ebtisama          48          41       17.71          85.42
+2    Zahrat Al-Madina          32          31       17.50          96.88
+
+Subject: Math Total Score
+             TLS Name  n_students  pass_count  mean_score  pass_rate_pct
+0     Al-Buraq Center          27          12       12.96          44.44
+1  Sonna' Al Ebtisama          48          35       15.81          72.92
+2    Zahrat Al-Madina          32          31       17.66          96.88
+====================================================================================================
+Overall success rates by location:
+             TLS Name  English Total Score mapped %  Arabic Total Score mapped %  Math Total Score mapped %
+0     Al-Buraq Center                         77.78                        74.07                      44.44
+1  Sonna' Al Ebtisama                         45.83                        85.42                      72.92
+2    Zahrat Al-Madina                         78.12                        96.88                      96.88
+====================================================================================================
+
+====================================================================================================
+SUCCESS RATES @ Threshold ≥ 15 / 20
+====================================================================================================
+
+Subject: English Total Score
+             TLS Name  n_students  pass_count  mean_score  pass_rate_pct
+0     Al-Buraq Center          27          21       16.44          77.78
+1  Sonna' Al Ebtisama          48          22       13.00          45.83
+2    Zahrat Al-Madina          32          25       15.53          78.12
+
+Subject: Arabic Total Score
+             TLS Name  n_students  pass_count  mean_score  pass_rate_pct
+0     Al-Buraq Center          27          20       15.11          74.07
+1  Sonna' Al Ebtisama          48          41       17.71          85.42
+2    Zahrat Al-Madina          32          31       17.50          96.88
+
+Subject: Math Total Score
+             TLS Name  n_students  pass_count  mean_score  pass_rate_pct
+0     Al-Buraq Center          27          12       12.96          44.44
+1  Sonna' Al Ebtisama          48          35       15.81          72.92
+2    Zahrat Al-Madina          32          31       17.66          96.88
+
+Overall Success by Location:
+             TLS Name  English Total Score mapped %  Arabic Total Score mapped %  Math Total Score mapped %
+0     Al-Buraq Center                         77.78                        74.07                      44.44
+1  Sonna' Al Ebtisama                         45.83                        85.42                      72.92
+2    Zahrat Al-Madina                         78.12                        96.88                      96.88
+====================================================================================================
+
+
+ Plotting Success Rates
+✓ Created success rate chart for threshold 15
+
+✓ Successfully completed Sheet1
+
+====================================================================================================
+PIPELINE COMPLETE!
+====================================================================================================
+
