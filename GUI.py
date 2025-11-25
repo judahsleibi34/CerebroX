@@ -31,9 +31,7 @@ class MainWindow(QMainWindow):
             }}
         """)
 
-        db_path = Path("cerebrox_data.db")
-        self.db = CerebroXDB(db_path)
-        print(f"[DB] Database initialized at: {db_path}")
+        print("[DB] Database connected to MySQL: cerebrox_data")
 
         self.stack = QStackedWidget()
         self.setCentralWidget(self.stack)

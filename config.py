@@ -244,43 +244,22 @@ def validate_config():
     return True
 
 PALETTE = {
-    "bg":             "#0B0F0D",
-    "surface":        "#121714",
-    "panel":          "#171D19",
-    "border":         "#26302B",
-    "grid":           "#1E2622",
-
-    "text":           "#E5F1EB",
-    "muted":          "#A0B4AC",
-
-    "primary":        "#5EC9A8",   # mint-teal
-    "primary2":       "#3AAE8F",
-    "accent":         "#7BE7C5",   # soft highlight
-    "glow":           "#48B79A",
-
-    "accent_hover":   "#8FF0D0",
-    "accent_pressed": "#57C2A0",
+    "bg":             "#0A1220",   # Deep navy (darker than your current background)
+    "surface":        "#0F1829",   # Slightly brighter navy for cards / panels
+    "panel":          "#152033",   # Tertiary navy for contrast
+    "border":         "#1F2C44",   # Subtle desaturated blue border
+    "grid":           "#1B263A",   # Grid / separators
+    
+    "text":           "#E8EEF6",   # Soft white-blue (easier on eyes)
+    "muted":          "#A7B4C8",   # Muted text / placeholders
+    
+    # NEW BLUE SYSTEM
+    "primary":        "#4BA3F1",   # Main sky-blue (buttons, highlights)
+    "primary2":       "#2D8BDC",   # Darker blue for active/hovers
+    "accent":         "#7CC7FF",   # Light accent blue (logo-style dot)
+    "glow":           "#3BA0FF",   # Glow/highlight
+    
+    "accent_hover":   "#9AD8FF",
+    "accent_pressed": "#5FB4E8",
 }
-
-# PALETTE = {
-#     "bg":             "#0A0D14",
-#     "surface":        "#111624",
-#     "panel":          "#161C2C",
-#     "border":         "#263044",
-#     "grid":           "#1D2435",
-
-#     "text":           "#E7ECF8",
-#     "muted":          "#9BA6BD",
-
-#     "primary":        "#5D8BFF",   # soft sapphire blue
-#     "primary2":       "#729BFF",
-#     "accent":         "#8FB3FF",   # gentle highlight
-#     "glow":           "#4E76E6",
-
-#     "accent_hover":   "#A1C3FF",
-#     "accent_pressed": "#6287F0",
-# }
-
-
-
 

@@ -905,9 +905,48 @@ class DatasetCleaning_Window(QWidget):
             df_to_save = self.merged_df if self.merged_df is not None else self.current_df
             df_to_save.to_csv(renamed_path, index=False, encoding="utf-8-sig")
 
-            db_path = renamed_path.with_suffix(".db")
-            db = CerebroXDB(db_path)
-            table_name = db.save_snapshot(df=df_to_save, name="Cleaned Dataset", source_csv=renamed_path)
+            db = CerebroXDB(
+                host="localhost",
+                user="root",
+                password="Jus@12345",
+                port=3306
+            )
+
+            try:
+                projects_df = db.list_projects()
+                if projects_df.empty:
+                    project_id = db.create_project(
+                        project_name="Data Cleaning Workspace",
+                        description="Storage for all cleaned datasets from the application"
+                    )
+                    print(f"✓ Created new project: {project_id}")
+
+                else:
+                    project_id = projects_df.iloc[0]['project_id']
+                    db.load_project(project_id)
+                    print(f"✓ Loaded existing project: {project_id}")
+                    
+            except Exception as e:
+                self.show_msg(
+                    QMessageBox.Icon.Critical, 
+                    "Database Error", 
+                    f"Failed to initialize project:\n{e}"
+                )
+                return
+
+            table_name = db.save_dataset(
+                df=df_to_save,
+                dataset_name="Cleaned Dataset",
+                stage='cleaned',
+                source_csv=renamed_path
+            )
+
+            table_name = db.save_dataset(
+                df=df_to_save, 
+                dataset_name="Cleaned Dataset", 
+                stage='cleaned',
+                source_csv=renamed_path
+            )
 
             if self.sheets_dfs:
                 folder = renamed_path.parent / "cleaned_sheets"
@@ -932,7 +971,7 @@ class DatasetCleaning_Window(QWidget):
                 QMessageBox.Icon.Information,
                 "File Saved",
                 f"Cleaned dataset saved as:\n{renamed_path}\n\n"
-                f"Database snapshot saved in:\n{db_path}\nTable: {table_name}"
+                f"Database snapshot saved in MySQL\nDatabase: cerebrox_data\nTable: {table_name}"
             )
 
         except Exception as e:
