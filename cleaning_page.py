@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
 from pathlib import Path
 import pandas as pd
 
+from database import CerebroXDB
 from config import PALETTE
 from data_preperation import Data_analysis
 
@@ -24,30 +25,26 @@ class DatasetCleaning_Window(QWidget):
         self.setWindowTitle("Dataset Cleaning")
         self.setStyleSheet(f"background: {PALETTE['bg']};")
 
-        self.current_df = None          # Currently displayed df (merged or specific sheet)
-        self.merged_df = None           # Combined df from all sheets (if any)
-        self.sheets_dfs = {}            # Dict[sheet_name -> df]
-        self.current_sheet = None       # Name of currently selected sheet
+        self.current_df = None          
+        self.merged_df = None           
+        self.sheets_dfs = {}             
+        self.current_sheet = None      
         self.data_analyzer = None
 
-        self.rename_edits = {}          # {old_col_name: QLineEdit}
-        self.value_edits = {}           # {col_name: {old_value: QLineEdit}}
-        self.drop_checkboxes = {}       # {col_name: QCheckBox}
-        self.processed_path = None      # Path to processed CSV from loading screen
-
-        # ===== Layout root =====
+        self.rename_edits = {}           
+        self.value_edits = {}            
+        self.drop_checkboxes = {}        
+        self.processed_path = None      
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(50, 40, 50, 40)
         main_layout.setSpacing(16)
 
-        # ===== Title =====
         main_title = QLabel("Dataset Cleaning")
         main_title.setAlignment(Qt.AlignLeft)
         main_title.setStyleSheet(f"color: {PALETTE['text']};")
         main_title.setFont(QFont("Segoe UI", 28, QFont.Weight.Bold))
         main_layout.addWidget(main_title)
 
-        # ===== Sheet selector combo =====
         self.sheet_combo = QComboBox()
         self.sheet_combo.setFixedWidth(200)
         self.sheet_combo.addItem("All sheets (merged)")
@@ -76,7 +73,6 @@ class DatasetCleaning_Window(QWidget):
         le.setAlignment(Qt.AlignCenter)
         le.setReadOnly(True)
 
-        # ===== Tabs =====
         self.tabs = QTabWidget()
         self.tabs.setStyleSheet(
             f"""
@@ -105,7 +101,6 @@ class DatasetCleaning_Window(QWidget):
         )
         main_layout.addWidget(self.tabs, stretch=1)
 
-        # ===== Renaming tab =====
         self.renaming_tab = QWidget()
         renaming_layout = QVBoxLayout(self.renaming_tab)
         renaming_layout.setContentsMargins(16, 16, 16, 16)
@@ -169,7 +164,6 @@ class DatasetCleaning_Window(QWidget):
 
         split_layout.addWidget(self.columns_scroll, stretch=2)
 
-        # RIGHT: value mapping panel
         self.values_panel = QWidget()
         self.values_panel.setStyleSheet("background: transparent;")
         values_layout = QVBoxLayout(self.values_panel)
@@ -243,7 +237,6 @@ class DatasetCleaning_Window(QWidget):
 
         self.tabs.addTab(self.renaming_tab, "Renaming")
 
-        # ===== Wrangling tab =====
         self.cleaning_tab = QWidget()
         cleaning_main_layout = QVBoxLayout(self.cleaning_tab)
         cleaning_main_layout.setContentsMargins(16, 16, 16, 16)
@@ -254,7 +247,6 @@ class DatasetCleaning_Window(QWidget):
         wrangling_title.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
         cleaning_main_layout.addWidget(wrangling_title)
 
-        # Create scroll area
         main_scroll = QScrollArea()
         main_scroll.setWidgetResizable(True)
         main_scroll.setFrameShape(QFrame.NoFrame)
@@ -290,12 +282,10 @@ class DatasetCleaning_Window(QWidget):
         cleaning_layout.setContentsMargins(0, 0, 12, 0)
         cleaning_layout.setSpacing(20)
 
-        # Data Quality Section
         quality_label = QLabel("Data Quality Actions")
         quality_label.setStyleSheet(f"color: {PALETTE['text']}; font-size: 14px; font-weight: 600;")
         cleaning_layout.addWidget(quality_label)
 
-        # Null Values
         null_container = QWidget()
         null_container.setStyleSheet("background: transparent;")
         null_layout = QHBoxLayout(null_container)
@@ -330,7 +320,6 @@ class DatasetCleaning_Window(QWidget):
         null_layout.addStretch()
         cleaning_layout.addWidget(null_container)
 
-        # Duplicates
         dup_container = QWidget()
         dup_container.setStyleSheet("background: transparent;")
         dup_layout = QHBoxLayout(dup_container)
@@ -365,7 +354,6 @@ class DatasetCleaning_Window(QWidget):
         dup_layout.addStretch()
         cleaning_layout.addWidget(dup_container)
 
-        # Apply Quality Button (still applies immediately if user wants)
         self.apply_quality_btn = QPushButton("Apply Data Quality Actions")
         self.apply_quality_btn.setFixedSize(240, 38)
         self.apply_quality_btn.setCursor(Qt.PointingHandCursor)
@@ -385,65 +373,21 @@ class DatasetCleaning_Window(QWidget):
         self.apply_quality_btn.clicked.connect(self.apply_quality_actions)
         cleaning_layout.addWidget(self.apply_quality_btn, alignment=Qt.AlignLeft)
 
-        # Divider
         divider = QFrame()
         divider.setFrameShape(QFrame.HLine)
         divider.setStyleSheet(f"background: {PALETTE['border']}; max-height: 1px;")
         cleaning_layout.addWidget(divider)
 
-        # Column Dropping Section
         drop_label = QLabel("Select Columns to Drop")
         drop_label.setStyleSheet(f"color: {PALETTE['text']}; font-size: 14px; font-weight: 600;")
         cleaning_layout.addWidget(drop_label)
 
-        # Column checkboxes container
         self.drop_inner = QWidget()
         self.drop_inner.setStyleSheet("background: transparent;")
         self.drop_inner_layout = QVBoxLayout(self.drop_inner)
         self.drop_inner_layout.setContentsMargins(0, 8, 0, 8)
         self.drop_inner_layout.setSpacing(8)
         cleaning_layout.addWidget(self.drop_inner)
-
-        # Drop Columns Button (immediate)
-        self.drop_columns_btn = QPushButton("Drop Selected Columns")
-        self.drop_columns_btn.setFixedSize(240, 38)
-        self.drop_columns_btn.setCursor(Qt.PointingHandCursor)
-        self.drop_columns_btn.setStyleSheet(f"""
-            QPushButton {{
-                background: {PALETTE['primary']};
-                color: {PALETTE['text']};
-                border: none;
-                border-radius: 6px;
-                padding: 8px 16px;
-                font-size: 14px;
-                font-weight: 600;
-            }}
-            QPushButton:hover {{ background: {PALETTE['accent_hover']}; }}
-            QPushButton:pressed {{ background: {PALETTE['glow']}; }}
-        """)
-        self.drop_columns_btn.clicked.connect(self.drop_selected_columns)
-        cleaning_layout.addWidget(self.drop_columns_btn, alignment=Qt.AlignLeft)
-
-        # NEW: Save Changes button inside Wrangling tab
-        self.save_wrangling_btn = QPushButton("Save Changes")
-        self.save_wrangling_btn.setFixedSize(240, 38)
-        self.save_wrangling_btn.setCursor(Qt.PointingHandCursor)
-        self.save_wrangling_btn.setStyleSheet(f"""
-            QPushButton {{
-                background: {PALETTE['primary']};
-                color: {PALETTE['text']};
-                border: none;
-                border-radius: 6px;
-                padding: 8px 16px;
-                font-size: 14px;
-                font-weight: 600;
-            }}
-            QPushButton:hover {{ background: {PALETTE['accent_hover']}; }}
-            QPushButton:pressed {{ background: {PALETTE['glow']}; }}
-        """)
-        # IMPORTANT: uses the same full pipeline as the bottom Apply & Save
-        self.save_wrangling_btn.clicked.connect(self.run_cleaning_process)
-        cleaning_layout.addWidget(self.save_wrangling_btn, alignment=Qt.AlignLeft)
 
         cleaning_layout.addStretch(1)
         main_scroll.setWidget(scroll_container)
@@ -452,12 +396,9 @@ class DatasetCleaning_Window(QWidget):
         self.tabs.addTab(self.cleaning_tab, "Wrangling")
         self.tabs.currentChanged.connect(self.on_tab_changed)
 
-        # ===== Bottom buttons =====
-                # ===== Bottom buttons =====
         button_row = QHBoxLayout()
         button_row.setSpacing(12)
 
-        # Apply & Save button on the left
         self.apply_clean_btn = QPushButton("Apply & Save")
         self.apply_clean_btn.setFixedSize(160, 38)
         self.apply_clean_btn.setCursor(Qt.PointingHandCursor)
@@ -483,7 +424,6 @@ class DatasetCleaning_Window(QWidget):
         self.apply_clean_btn.clicked.connect(self.run_cleaning_process)
         button_row.addWidget(self.apply_clean_btn)
 
-        # NEW: go to plotting frame button (next to Apply & Save)
         self.plot_btn = QPushButton("Go to Plotting")
         self.plot_btn.setFixedSize(160, 38)
         self.plot_btn.setCursor(Qt.PointingHandCursor)
@@ -579,7 +519,6 @@ class DatasetCleaning_Window(QWidget):
     def apply_quality_actions(self):
         selected_sheet = self.sheet_combo.currentText()
 
-        # Get the appropriate dataframe
         if not selected_sheet:
             self.show_msg(
                 QMessageBox.Icon.Warning,
@@ -608,7 +547,6 @@ class DatasetCleaning_Window(QWidget):
         initial_rows = len(df)
 
         try:
-            # Null handling
             null_option = self.null_combo.currentText()
             if null_option == "Drop rows with ANY null":
                 before = len(df)
@@ -622,7 +560,6 @@ class DatasetCleaning_Window(QWidget):
                 rows_removed = before - len(df)
                 actions_performed.append(f"✓ Dropped {rows_removed} rows with ALL null values")
 
-            # Duplicate handling
             dup_option = self.dup_combo.currentText()
             if dup_option == "Keep first occurrence":
                 before = len(df)
@@ -636,7 +573,6 @@ class DatasetCleaning_Window(QWidget):
                 rows_removed = before - len(df)
                 actions_performed.append(f"✓ Removed {rows_removed} duplicate rows (kept last)")
 
-            # Update the dataframe reference
             if selected_sheet == "All sheets (merged)":
                 self.merged_df = df
             else:
@@ -660,10 +596,6 @@ class DatasetCleaning_Window(QWidget):
         except Exception as e:
             self.show_msg(QMessageBox.Icon.Critical, "Error", f"Failed to apply quality actions:\n{e}")
 
-    # =======================
-    #   DROP COLUMNS
-    # =======================
-
     def _clear_drop_layout(self):
         while self.drop_inner_layout.count():
             item = self.drop_inner_layout.takeAt(0)
@@ -677,7 +609,6 @@ class DatasetCleaning_Window(QWidget):
 
         selected_sheet = self.sheet_combo.currentText()
 
-        # Get the appropriate dataframe
         if not selected_sheet:
             return
 
@@ -691,7 +622,6 @@ class DatasetCleaning_Window(QWidget):
         if df is None or df.empty:
             return
 
-        # Select All checkbox
         self.select_all_cb = QCheckBox("Select / Deselect All")
         self.select_all_cb.setStyleSheet(f"""
             QCheckBox {{
@@ -718,13 +648,11 @@ class DatasetCleaning_Window(QWidget):
         self.select_all_cb.stateChanged.connect(self._toggle_all_columns)
         self.drop_inner_layout.addWidget(self.select_all_cb)
 
-        # Divider
         divider = QFrame()
         divider.setFrameShape(QFrame.HLine)
         divider.setStyleSheet(f"background: {PALETTE['border']}; max-height: 1px; margin: 4px 0px;")
         self.drop_inner_layout.addWidget(divider)
 
-        # Column checkboxes
         for col in df.columns:
             cb = QCheckBox(str(col))
             cb.setStyleSheet(f"""
@@ -762,7 +690,6 @@ class DatasetCleaning_Window(QWidget):
     def drop_selected_columns(self):
         selected_sheet = self.sheet_combo.currentText()
 
-        # Get the appropriate dataframe
         if not selected_sheet:
             self.show_msg(
                 QMessageBox.Icon.Warning,
@@ -791,7 +718,6 @@ class DatasetCleaning_Window(QWidget):
 
         df.drop(columns=to_drop, inplace=True, errors="ignore")
 
-        # Update the dataframe reference
         if selected_sheet == "All sheets (merged)":
             self.merged_df = df
         else:
@@ -805,18 +731,10 @@ class DatasetCleaning_Window(QWidget):
 
         self.populate_drop_columns()
 
-    # =======================
-    #   TAB CHANGE
-    # =======================
-
     def on_tab_changed(self, index: int):
         is_wrangling_tab = (self.tabs.widget(index) is self.cleaning_tab)
         if is_wrangling_tab:
             self.populate_drop_columns()
-
-    # =======================
-    #   VALUE MAPPING SIDE
-    # =======================
 
     def _on_value_col_changed(self, index: int):
         if index < 0:
@@ -848,10 +766,6 @@ class DatasetCleaning_Window(QWidget):
             if real_col:
                 self.show_values_for_column(real_col)
 
-    # =======================
-    #   RUN CLEANING PROCESS
-    # =======================
-
     def _normalize_headers_inplace(self, df: pd.DataFrame):
         """Use Data_analysis._normalize_header on all column names."""
         if df is None:
@@ -872,20 +786,15 @@ class DatasetCleaning_Window(QWidget):
         for col in obj_cols:
             df[col] = df[col].map(Data_analysis._normalize_value)
 
+    def _safe_filename(self, name: str) -> str:
+        return "".join(c for c in name if c.isalnum() or c in (" ", "_", "-")).strip()
+
+
     def run_cleaning_process(self):
-        """
-        Final cleaning step:
-        - Apply wrangling options (nulls, duplicates, column drops) for current sheet.
-        - Apply UI-based column renames.
-        - Apply UI-based value mappings.
-        - Normalize string values.
-        - Save the cleaned dataframe to CSV.
-        """
         if self.current_df is None and self.merged_df is None:
             self.show_msg(QMessageBox.Icon.Warning, "No Data", "Please load a dataset first.")
             return
-
-        # 0) Determine which dataframe we are working on (current sheet selection)
+        
         selected_sheet = self.sheet_combo.currentText()
         if not selected_sheet or selected_sheet == "All sheets (merged)":
             df = self.merged_df
@@ -894,40 +803,36 @@ class DatasetCleaning_Window(QWidget):
             df = self.sheets_dfs.get(selected_sheet, self.merged_df)
             sheet_key = selected_sheet
 
-        # 1) Apply wrangling based on current UI state (quietly, no popups)
         try:
             if df is not None and not df.empty:
-                # Null handling
+
                 null_option = self.null_combo.currentText()
                 if null_option == "Drop rows with ANY null":
-                    df.dropna(how='any', inplace=True)
+                    df.dropna(how="any", inplace=True)
                 elif null_option == "Drop rows with ALL nulls":
-                    df.dropna(how='all', inplace=True)
+                    df.dropna(how="all", inplace=True)
 
-                # Duplicate handling
                 dup_option = self.dup_combo.currentText()
                 if dup_option == "Keep first occurrence":
-                    df.drop_duplicates(keep='first', inplace=True)
+                    df.drop_duplicates(keep="first", inplace=True)
                 elif dup_option == "Keep last occurrence":
-                    df.drop_duplicates(keep='last', inplace=True)
+                    df.drop_duplicates(keep="last", inplace=True)
 
-                # Column dropping based on current checkboxes
                 to_drop = [col for col, cb in self.drop_checkboxes.items() if cb.isChecked()]
                 if to_drop:
                     df.drop(columns=to_drop, inplace=True, errors="ignore")
 
-                # Write back to attributes
                 if sheet_key is None:
                     self.merged_df = df
                     self.current_df = self.merged_df
                 else:
                     self.sheets_dfs[sheet_key] = df
                     self.current_df = self.sheets_dfs[sheet_key]
+
         except Exception as e:
             self.show_msg(QMessageBox.Icon.Critical, "Error", f"Failed to apply wrangling actions:\n{e}")
             return
-
-        # 2) Build rename map from Renaming tab
+        
         rename_map = {}
         for old_name, edit_widget in self.rename_edits.items():
             if edit_widget is None:
@@ -937,30 +842,23 @@ class DatasetCleaning_Window(QWidget):
                 rename_map[old_name] = new_name
 
         try:
-            # 3) Apply column renames from UI
             if rename_map:
-                # Rename current df
-                if self.current_df is not None:
+                if self.current_df is not None:  
                     self.current_df.rename(columns=rename_map, inplace=True)
 
-                # Rename merged df (if different)
                 if self.merged_df is not None and self.current_df is not self.merged_df:
                     self.merged_df.rename(columns=rename_map, inplace=True)
 
-                # Rename all sheets
                 for sheet_name, sdf in self.sheets_dfs.items():
                     sdf.rename(columns=rename_map, inplace=True)
 
-                renamed_list = "\n".join(
-                    [f"  '{old}' → '{new}'" for old, new in rename_map.items()]
-                )
+                renamed_list = "\n".join([f"'{old}' → '{new}'" for old, new in rename_map.items()])
                 self.show_msg(
                     QMessageBox.Icon.Information,
                     "Columns Renamed",
-                    f"Successfully renamed {len(rename_map)} column(s):\n\n{renamed_list}"
+                    f"Successfully renamed {len(rename_map)} columns:\n\n{renamed_list}"
                 )
 
-            # 4) Apply value mappings from UI
             total_value_maps = 0
             if self.merged_df is not None:
                 for col_name, mapping_widgets in self.value_edits.items():
@@ -969,8 +867,6 @@ class DatasetCleaning_Window(QWidget):
 
                     replace_map = {}
                     for old_val, edit in mapping_widgets.items():
-                        if edit is None:
-                            continue
                         new_val = edit.text().strip()
                         if new_val and new_val != old_val:
                             replace_map[old_val] = new_val
@@ -978,10 +874,8 @@ class DatasetCleaning_Window(QWidget):
                     if not replace_map:
                         continue
 
-                    # Apply to merged df
                     self.merged_df[col_name] = self.merged_df[col_name].replace(replace_map)
 
-                    # Apply to each sheet that has the column
                     for sheet_name, sdf in self.sheets_dfs.items():
                         if col_name in sdf.columns:
                             sdf[col_name] = sdf[col_name].replace(replace_map)
@@ -992,10 +886,9 @@ class DatasetCleaning_Window(QWidget):
                 self.show_msg(
                     QMessageBox.Icon.Information,
                     "Value Mappings Applied",
-                    f"Successfully applied {total_value_maps} value mapping(s)."
+                    f"Applied {total_value_maps} value mappings."
                 )
 
-            # 5) Normalize values on all dfs
             if self.merged_df is not None:
                 self._normalize_values_inplace(self.merged_df)
                 for sheet_name, sdf in self.sheets_dfs.items():
@@ -1003,7 +896,6 @@ class DatasetCleaning_Window(QWidget):
             elif self.current_df is not None:
                 self._normalize_values_inplace(self.current_df)
 
-            # 6) Save cleaned / renamed file
             if self.processed_path:
                 p = Path(self.processed_path)
                 renamed_path = p.with_name(p.stem + "_renamed.csv")
@@ -1013,27 +905,48 @@ class DatasetCleaning_Window(QWidget):
             df_to_save = self.merged_df if self.merged_df is not None else self.current_df
             df_to_save.to_csv(renamed_path, index=False, encoding="utf-8-sig")
 
+            db_path = renamed_path.with_suffix(".db")
+            db = CerebroXDB(db_path)
+            table_name = db.save_snapshot(df=df_to_save, name="Cleaned Dataset", source_csv=renamed_path)
+
+            if self.sheets_dfs:
+                folder = renamed_path.parent / "cleaned_sheets"
+                folder.mkdir(exist_ok=True)
+
+                for sheet_name, sdf in self.sheets_dfs.items():
+                    safe = self._safe_filename(sheet_name)
+
+                    describe_path = folder / f"{safe}_describe.csv"
+                    sdf.describe(include="all").to_csv(describe_path, encoding="utf-8-sig")
+
+                    clean_path = folder / f"{safe}_cleaned.csv"
+                    sdf.to_csv(clean_path, index=False, encoding="utf-8-sig")
+
+                self.show_msg(
+                    QMessageBox.Icon.Information,
+                    "Sheets Saved",
+                    f"Each sheet has been saved along with its statistics inside:\n{folder}"
+                )
+
             self.show_msg(
                 QMessageBox.Icon.Information,
                 "File Saved",
-                f"Cleaned / wrangled / renamed dataset saved as:\n{renamed_path}"
+                f"Cleaned dataset saved as:\n{renamed_path}\n\n"
+                f"Database snapshot saved in:\n{db_path}\nTable: {table_name}"
             )
 
         except Exception as e:
             self.show_msg(
                 QMessageBox.Icon.Critical,
                 "Error",
-                f"Failed to apply cleaning / wrangling / normalization:\n{e}"
+                f"Failed during cleaning/saving:\n{e}"
             )
+            return
 
-        # Refresh UI after all changes
         self.show_columns()
         self._populate_value_col_combo()
         self.populate_drop_columns()
 
-    # =======================
-    #   DATAFRAME SETTERS
-    # =======================
 
     def set_dataframes(self, merged_df: pd.DataFrame, sheets_dfs: dict):
         self.merged_df = merged_df
@@ -1069,10 +982,6 @@ class DatasetCleaning_Window(QWidget):
         self._populate_value_col_combo()
         self.show_columns()
         self.populate_drop_columns()
-
-    # =======================
-    #   VALUE PANEL CONTENT
-    # =======================
 
     def _clear_values_layout(self):
         while self.values_inner_layout.count():
@@ -1148,10 +1057,6 @@ class DatasetCleaning_Window(QWidget):
 
         self.values_inner_layout.addStretch(1)
 
-    # =======================
-    #   SHEET SWITCHING
-    # =======================
-
     def change_sheet(self, name: str):
         if name == "All sheets (merged)" or not name:
             self.current_sheet = None
@@ -1163,23 +1068,14 @@ class DatasetCleaning_Window(QWidget):
         self.show_columns()
         self.populate_drop_columns()
 
-    # =======================
-    #   LIFECYCLE
-    # =======================
-
     def showEvent(self, event):
         super().showEvent(event)
         main_window = self.window()
-        # Auto-load from the loading screen once, if available
         if (self.current_df is None and hasattr(main_window, "loading") and
                 getattr(main_window.loading, "current_df", None) is not None):
             sheets_dfs = getattr(main_window.loading, "sheets_dfs", {})
             self.processed_path = getattr(main_window.loading, "processed_path", None)
             self.set_dataframes(main_window.loading.current_df, sheets_dfs)
-
-    # =======================
-    #   COLUMN RENAME UI
-    # =======================
 
     def _clear_columns_layout(self):
         while self.columns_layout.count():
@@ -1285,10 +1181,6 @@ class DatasetCleaning_Window(QWidget):
             self.rename_edits[old_name] = edit
 
         self.columns_layout.addStretch(1)
-
-    # =======================
-    #   NAVIGATION & UTILS
-    # =======================
 
     def go_back(self):
         main_window = self.window()
