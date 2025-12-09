@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.pyc
+
+# Virtual environments
+venv/
+env/
+MEALenv/
+
+# PyInstaller build folders
+build/
+dist/
+*.spec
+
+# Logs
+*.log
+*.txt
+
+# CSV outputs
+*_cleaned/
+
+# IDE folders
+.vscode/
+.idea/
+
+# Ignore SQLite database files
+*.db
