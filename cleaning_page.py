@@ -11,6 +11,7 @@ import pandas as pd
 import csv
 import os, sys, traceback
 import json
+import datetime
 from pathlib import Path
 
 from database import CerebroXDB
@@ -548,10 +549,16 @@ class DatasetCleaning_Window(QWidget):
 
     def log(self, msg):
         try:
+            timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            log_entry = f"[{timestamp}] {msg}\n"
+            
             with open(self.LOG_FILE, "a", encoding="utf-8") as f:
-                f.write(msg + "\n")
+                f.write(log_entry)
+            
+            print(log_entry.strip())
         except Exception as e:
-            print("LOGGER ERROR:", e)
+            print(f"⚠️ LOGGER ERROR: {e}")
+            print(f"   Attempted to log: {msg}")
 
     def excepthook(type, value, tb):
         print("\n🔥🔥 UNCAUGHT ERROR IN QT CALLBACK 🔥🔥")
@@ -1449,29 +1456,44 @@ class DatasetCleaning_Window(QWidget):
             return ", ".join(new_parts)
 
     def apply_one_hot_encoding(self):
+        self.log("=" * 60)
+        self.log("STARTING ONE-HOT ENCODING FOR MERGED DATAFRAME")
+        self.log("=" * 60)
+        
         if self.merged_df is None:
-            return
+            self.log("⚠️ No merged_df to encode - SKIPPING")
+            return {}
 
-        df = self.merged_df
-        encoding_map = {}  
-        multi_cols = [
-            col for col in df.columns
-            if df[col].dtype == "object"
-            and df[col].dropna().astype(str).str.contains(r"(،|,)\s*").any()
-        ]
+        df = self.merged_df.copy()   
+        encoding_map = {}   
+        
+        self.log(f"DataFrame shape: {df.shape[0]} rows, {df.shape[1]} columns")
+
+        multi_cols = []
+        for col in df.columns:
+            if df[col].dtype == "object":
+                has_separator = df[col].dropna().astype(str).str.contains(r"(،|,)\s*").any()
+                if has_separator:
+                    multi_cols.append(col)
+                    self.log(f"  ✓ Found multi-value column: {col}")
 
         if not multi_cols:
-            self.log("No multi-value columns found for encoding")
-            return
+            self.log("⚠️ No multi-value columns found for encoding")
+            return {}
 
-        self.log(f"Found {len(multi_cols)} multi-value columns to encode")
+        self.log(f"\n📊 Total multi-value columns to encode: {len(multi_cols)}\n")
 
         for col in multi_cols:
+            self.log(f"Processing column: '{col}'")
+            
             unique_parts = []
             seen = set()
 
+            cell_count = 0
             for val in df[col].dropna():
-                for part in self._split_respecting_parentheses(val):
+                cell_count += 1
+                parts = self._split_respecting_parentheses(val)
+                for part in parts:
                     part = part.strip()
                     if part and part not in seen:
                         seen.add(part)
@@ -1479,7 +1501,11 @@ class DatasetCleaning_Window(QWidget):
 
             n_bits = len(unique_parts)
             if n_bits == 0:
+                self.log(f"  ⚠️ No unique values found in '{col}' - SKIPPING")
                 continue
+
+            self.log(f"  • Processed {cell_count} non-null cells")
+            self.log(f"  • Found {n_bits} unique individual values")
 
             value_to_index = {v: i for i, v in enumerate(unique_parts)}
             
@@ -1487,6 +1513,10 @@ class DatasetCleaning_Window(QWidget):
                 'bit_length': n_bits,
                 'mapping': {str(i): v for v, i in value_to_index.items()}
             }
+            
+            self.log(f"  • Bit position mapping:")
+            for v, i in sorted(value_to_index.items(), key=lambda x: x[1]):
+                self.log(f"    Bit {i}: {v}")
 
             def encode_cell(cell):
                 if pd.isna(cell):
@@ -1504,84 +1534,29 @@ class DatasetCleaning_Window(QWidget):
                 bit_string = "".join(bits).zfill(n_bits)
                 return "'" + bit_string
 
+            old_sample = df[col].iloc[0] if len(df) > 0 else None
             df[col] = df[col].apply(encode_cell)
+            new_sample = df[col].iloc[0] if len(df) > 0 else None
             
-            self.log(f"✓ Encoded column '{col}' with {n_bits} bits")
+            self.log(f"  ✓ Encoded '{col}' with {n_bits} bits")
+            self.log(f"    Example: '{old_sample}' -> '{new_sample}'")
+            self.log("")
 
         self.merged_df = df
         
-        if encoding_map:
-            self._save_encoding_map(encoding_map)
+        self.log(f"✅ ONE-HOT ENCODING COMPLETE FOR MERGED DATAFRAME")
+        self.log(f"   Encoded {len(encoding_map)} columns")
+        self.log("=" * 60 + "\n")
 
         return encoding_map
 
-
-    def apply_one_hot_encoding_to_sheets(self):
-        if not self.sheets_dfs:
-            return {}
-        
-        all_encoding_maps = {}
-        
-        for sheet_name, df in self.sheets_dfs.items():
-            multi_cols = [
-                col for col in df.columns
-                if df[col].dtype == "object"
-                and df[col].dropna().astype(str).str.contains(r"(،|,)\s*").any()
-            ]
-            
-            if not multi_cols:
-                continue
-            
-            sheet_encoding_map = {}
-            
-            for col in multi_cols:
-                unique_parts = []
-                seen = set()
-                
-                for val in df[col].dropna():
-                    for part in self._split_respecting_parentheses(val):
-                        part = part.strip()
-                        if part and part not in seen:
-                            seen.add(part)
-                            unique_parts.append(part)
-                
-                n_bits = len(unique_parts)
-                if n_bits == 0:
-                    continue
-                
-                value_to_index = {v: i for i, v in enumerate(unique_parts)}
-                
-                sheet_encoding_map[col] = {
-                    'bit_length': n_bits,
-                    'mapping': {str(i): v for v, i in value_to_index.items()}
-                }
-                
-                def encode_cell(cell):
-                    if pd.isna(cell):
-                        return "'" + ("0" * n_bits)
-                    
-                    bits = ["0"] * n_bits
-                    parts = self._split_respecting_parentheses(cell)
-                    
-                    for p in parts:
-                        p = p.strip()
-                        if p in value_to_index:
-                            bits[value_to_index[p]] = "1"
-                    
-                    return "'" + "".join(bits).zfill(n_bits)
-                
-                df[col] = df[col].apply(encode_cell)
-                
-                self.log(f"✓ Sheet '{sheet_name}': Encoded '{col}' with {n_bits} bits")
-            
-            if sheet_encoding_map:
-                all_encoding_maps[sheet_name] = sheet_encoding_map
-        
-        return all_encoding_maps
-
-
     def _save_encoding_map(self, encoding_map, sheet_maps=None):
+        self.log("=" * 60)
+        self.log("SAVING ENCODING MAPS")
+        self.log("=" * 60)
+        
         if not self.loaded_filename:
+            self.log("⚠️ No filename available - cannot save mapping files")
             return
         
         base_path = Path(self.loaded_filename).parent
@@ -1599,6 +1574,8 @@ class DatasetCleaning_Window(QWidget):
         json_path = out_folder / f"{base_name}_binary_encoding_map.json"
         with open(json_path, 'w', encoding='utf-8') as f:
             json.dump(mapping_doc, f, ensure_ascii=False, indent=2)
+        
+        self.log(f"✓ Saved JSON map to: {json_path}")
         
         txt_path = out_folder / f"{base_name}_binary_encoding_map.txt"
         with open(txt_path, 'w', encoding='utf-8') as f:
@@ -1635,40 +1612,52 @@ class DatasetCleaning_Window(QWidget):
                             f.write(f"  Bit {pos}: {value}\n")
                         f.write("\n")
         
-        self.log(f"✓ Saved encoding map to: {json_path}")
-        self.log(f"✓ Saved readable map to: {txt_path}")
+        self.log(f"✓ Saved TXT map to: {txt_path}")
+        self.log("=" * 60 + "\n")
         
-        print(f"\n📋 Binary encoding map saved to:\n   {json_path}\n   {txt_path}\n")
-
+        print(f"\n📋 Binary encoding map saved to:\n   📄 {json_path}\n   📄 {txt_path}\n")
 
     def save_to_database(self):
-        """Updated save_to_database with proper encoding map generation"""
+        self.log("\n" + "=" * 80)
+        self.log("STARTING SAVE TO DATABASE PROCESS")
+        self.log("=" * 80)
+        
         if self.loaded_filename is None:
+            self.log("❌ ERROR: No filename assigned")
             self.show_msg(QMessageBox.Icon.Warning, "No File", "No filename assigned.")
             return
 
         if self.merged_df is None and not self.sheets_dfs:
+            self.log("❌ ERROR: No data to save")
             self.show_msg(QMessageBox.Icon.Warning, "Empty", "Nothing to save.")
             return
 
         try:
-            merged_map = self.apply_one_hot_encoding()   
-            sheet_maps = self.apply_one_hot_encoding_to_sheets()   
+            self.log(f"Loaded filename: {self.loaded_filename}")
+            self.log(f"Merged DF shape: {self.merged_df.shape if self.merged_df is not None else 'None'}")
+            self.log(f"Number of sheets: {len(self.sheets_dfs)}\n")
+            
+            merged_map = self.apply_one_hot_encoding()
+            sheet_maps = self.apply_one_hot_encoding_to_sheets()
             
             self._save_encoding_map(merged_map, sheet_maps)
             
+            self.log("Saving CSV files...")
             csv_folder = self.save_cleaned_csv()
-            self.processed_path = csv_folder 
+            self.processed_path = csv_folder
+            self.log(f"✓ CSV files saved to: {csv_folder}\n")
             
-            self.log("Calling DB save...")
-            
+            self.log("Calling database save...")
             version, tables = self.db.save_run(
                 filename=self.loaded_filename,
                 merged_df=self.merged_df,
                 sheets=self.sheets_dfs
             )
             
-            self.log("DB save success.")
+            self.log(f"✓ Database save successful")
+            self.log(f"  Version: v{version}")
+            self.log(f"  Tables saved: {', '.join(tables)}")
+            self.log("=" * 80 + "\n")
             
             table_list_str = "\n".join(tables)
             
@@ -1686,9 +1675,106 @@ class DatasetCleaning_Window(QWidget):
             self.go_to_plot_frame()
             
         except Exception as e:
-            self.log(f"Save Error: {e}")
+            self.log(f"❌ SAVE ERROR: {e}")
+            self.log(f"   Traceback: {traceback.format_exc()}")
             self.show_msg(
                 QMessageBox.Icon.Critical,
                 "Save Error",
                 f"Failed to save dataset:\n{e}"
             )
+
+    def apply_one_hot_encoding_to_sheets(self):
+        self.log("=" * 60)
+        self.log("STARTING ONE-HOT ENCODING FOR INDIVIDUAL SHEETS")
+        self.log("=" * 60)
+        
+        if not self.sheets_dfs:
+            self.log("⚠️ No individual sheets to encode - SKIPPING")
+            return {}
+        
+        all_encoding_maps = {}
+        
+        for sheet_name, df in self.sheets_dfs.items():
+            self.log(f"\n📄 Processing sheet: '{sheet_name}'")
+            self.log(f"   Shape: {df.shape[0]} rows, {df.shape[1]} columns")
+            
+            df = df.copy()   
+            
+            multi_cols = []
+            for col in df.columns:
+                if df[col].dtype == "object":
+                    has_separator = df[col].dropna().astype(str).str.contains(r"(،|,)\s*").any()
+                    if has_separator:
+                        multi_cols.append(col)
+            
+            if not multi_cols:
+                self.log(f"   ⚠️ No multi-value columns in sheet '{sheet_name}'")
+                continue
+            
+            self.log(f"   Found {len(multi_cols)} multi-value columns")
+            
+            sheet_encoding_map = {}
+            
+            for col in multi_cols:
+                self.log(f"\n   Processing column: '{col}'")
+                
+                unique_parts = []
+                seen = set()
+                
+                cell_count = 0
+                for val in df[col].dropna():
+                    cell_count += 1
+                    parts = self._split_respecting_parentheses(val)
+                    for part in parts:
+                        part = part.strip()
+                        if part and part not in seen:
+                            seen.add(part)
+                            unique_parts.append(part)
+                
+                n_bits = len(unique_parts)
+                if n_bits == 0:
+                    self.log(f"     ⚠️ No unique values - SKIPPING")
+                    continue
+                
+                self.log(f"     • Processed {cell_count} cells")
+                self.log(f"     • Found {n_bits} unique values")
+                
+                value_to_index = {v: i for i, v in enumerate(unique_parts)}
+                
+                sheet_encoding_map[col] = {
+                    'bit_length': n_bits,
+                    'mapping': {str(i): v for v, i in value_to_index.items()}
+                }
+                
+                def encode_cell(cell):
+                    if pd.isna(cell):
+                        return "'" + ("0" * n_bits)
+                    
+                    bits = ["0"] * n_bits
+                    parts = self._split_respecting_parentheses(cell)
+                    
+                    for p in parts:
+                        p = p.strip()
+                        if p in value_to_index:
+                            bits[value_to_index[p]] = "1"
+                    
+                    return "'" + "".join(bits).zfill(n_bits)
+                
+                old_sample = df[col].iloc[0] if len(df) > 0 else None
+                df[col] = df[col].apply(encode_cell)
+                new_sample = df[col].iloc[0] if len(df) > 0 else None
+                
+                self.log(f"     ✓ Encoded with {n_bits} bits")
+                self.log(f"       Example: '{old_sample}' -> '{new_sample}'")
+            
+            self.sheets_dfs[sheet_name] = df
+            
+            if sheet_encoding_map:
+                all_encoding_maps[sheet_name] = sheet_encoding_map
+                self.log(f"\n   ✅ Sheet '{sheet_name}': Encoded {len(sheet_encoding_map)} columns")
+        
+        self.log(f"\n✅ ONE-HOT ENCODING COMPLETE FOR ALL SHEETS")
+        self.log(f"   Total sheets processed: {len(all_encoding_maps)}")
+        self.log("=" * 60 + "\n")
+        
+        return all_encoding_maps

@@ -1,3 +1,16 @@
+import os, sys
+def fix_qt_plugin_path():
+    try:
+        import PySide6
+        pyside_dir = os.path.dirname(PySide6.__file__)
+        plugin_path = os.path.join(pyside_dir, 'plugins')
+        os.environ['QT_PLUGIN_PATH'] = plugin_path
+        os.environ['QT_QPA_PLATFORM_PLUGIN_PATH'] = os.path.join(plugin_path, 'platforms')
+    except Exception as e:
+        print(f"Warning: Could not set Qt plugin path: {e}")
+
+fix_qt_plugin_path()
+
 import sys
 from pathlib import Path  
 from PySide6.QtCore import Qt, QSize
