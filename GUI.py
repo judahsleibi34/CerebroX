@@ -54,6 +54,10 @@ class MainWindow(QMainWindow):
         self.cleaning = DatasetCleaning_Window()
         self.plotting = Plotting_Page()
 
+        self.loading.main_window = self
+        self.cleaning.main_window = self
+        self.plotting.main_window = self
+
         self.stack.addWidget(self.landing)           
         self.stack.addWidget(self.loading)           
         self.stack.addWidget(self.cleaning)   
@@ -64,6 +68,14 @@ class MainWindow(QMainWindow):
     def _connect_navigation(self):
         if hasattr(self.loading, "next_clicked"):
             self.loading.next_clicked.connect(self.go_cleaning)
+        
+        if hasattr(self.cleaning, "next_btn"):
+            self.cleaning.next_btn.clicked.connect(self.go_plotting)
+        if hasattr(self.cleaning, "back_btn"):
+            self.cleaning.back_btn.clicked.connect(self.go_loading)
+        
+        if hasattr(self.plotting, "back_btn"):
+            self.plotting.back_btn.clicked.connect(self.go_cleaning)
 
     def go_loading(self):
         self.stack.setCurrentWidget(self.loading)

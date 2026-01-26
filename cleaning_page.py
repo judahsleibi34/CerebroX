@@ -1,3 +1,5 @@
+import subprocess
+
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
@@ -9,15 +11,15 @@ from pathlib import Path
 import pandas as pd
 
 import csv
-import os, sys, traceback
-import json
+import os, sys, traceback, subprocess
+import json, re
 import datetime
-from pathlib import Path
+
+import numpy as np
 
 from database import CerebroXDB
 from config import PALETTE
 from data_preperation import Data_analysis
-
 
 class CenterDelegate(QStyledItemDelegate):
     def initStyleOption(self, option, index):
@@ -263,6 +265,144 @@ class DatasetCleaning_Window(QWidget):
         wrangling_title.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
         cleaning_main_layout.addWidget(wrangling_title)
 
+        # =========================
+        # Encoding Tab (NEW)
+        # =========================
+        self.encoding_tab = QWidget()
+        encoding_layout = QVBoxLayout(self.encoding_tab)
+        encoding_layout.setContentsMargins(16, 16, 16, 16)
+        encoding_layout.setSpacing(12)
+
+        enc_title = QLabel("Encoding Selection")
+        enc_title.setStyleSheet(f"color: {PALETTE['text']};")
+        enc_title.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
+        encoding_layout.addWidget(enc_title)
+
+        # Search filter (optional but useful)
+        self.encoding_search = QLineEdit()
+        self.encoding_search.setPlaceholderText("Search columns...")
+        self.encoding_search.setStyleSheet(f"""
+            QLineEdit {{
+                color:{PALETTE['text']};
+                background:{PALETTE['panel']};
+                border:1px solid {PALETTE['border']};
+                border-radius:6px;
+                padding:6px 10px;
+                font-size: 13px;
+            }}
+        """)
+        self.encoding_search.textChanged.connect(self.populate_encoding_columns)
+        encoding_layout.addWidget(self.encoding_search)
+
+        # Select all/none row
+        row = QWidget()
+        row_l = QHBoxLayout(row)
+        row_l.setContentsMargins(0, 0, 0, 0)
+        row_l.setSpacing(10)
+
+        self.encoding_select_all = QCheckBox("Select / Deselect All")
+        self.encoding_select_all.setStyleSheet(f"""
+            QCheckBox {{
+                color: {PALETTE['accent']};
+                spacing: 8px;
+                font-size: 13px;
+                font-weight: 600;
+                padding: 6px 0px;
+            }}
+        """)
+        self.encoding_select_all.stateChanged.connect(self._toggle_all_encoding_columns)
+        row_l.addWidget(self.encoding_select_all)
+        row_l.addStretch(1)
+
+        encoding_layout.addWidget(row)
+
+        # Scroll list of checkboxes
+        self.encoding_scroll = QScrollArea()
+        self.encoding_scroll.setWidgetResizable(True)
+        self.encoding_scroll.setFrameShape(QFrame.NoFrame)
+        self.encoding_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.encoding_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.encoding_scroll.setStyleSheet(
+            f"""
+            QScrollArea {{
+                background: transparent;
+                border: none;
+            }}
+            QScrollBar:vertical {{
+                background: {PALETTE['bg']};
+                width: 10px;
+                border-radius: 5px;
+            }}
+            QScrollBar::handle:vertical {{
+                background: {PALETTE['border']};
+                border-radius: 5px;
+                min-height: 30px;
+            }}
+            QScrollBar::handle:vertical:hover {{
+                background: {PALETTE['primary']};
+            }}
+            QScrollBar::add-line:vertical,
+            QScrollBar::sub-line:vertical {{
+                height: 0px;
+            }}
+            """
+        )
+
+        self.encoding_inner = QWidget()
+        self.encoding_inner.setStyleSheet("background: transparent;")
+        self.encoding_inner_layout = QVBoxLayout(self.encoding_inner)
+        self.encoding_inner_layout.setContentsMargins(0, 8, 0, 8)
+        self.encoding_inner_layout.setSpacing(8)
+        self.encoding_inner_layout.setAlignment(Qt.AlignTop)
+
+        self.encoding_scroll.setWidget(self.encoding_inner)
+        encoding_layout.addWidget(self.encoding_scroll, stretch=1)
+
+        # Encoding mode selector row
+        mode_row = QWidget()
+        mode_l = QHBoxLayout(mode_row)
+        mode_l.setContentsMargins(0, 0, 0, 0)
+        mode_l.setSpacing(10)
+
+        mode_lbl = QLabel("Encoding Mode:")
+        mode_lbl.setStyleSheet(f"color:{PALETTE['text']}; font-size: 13px;")
+        mode_l.addWidget(mode_lbl)
+
+        self.encoding_mode_combo = QComboBox()
+        self.encoding_mode_combo.addItems([
+            "AUTO",
+            "FORCE_LABEL",
+            "FORCE_ONEHOT",
+            "FORCE_MULTIHOT",
+            "FORCE_BITMASK"
+        ])
+        self.encoding_mode_combo.setStyleSheet(f"""
+            QComboBox {{
+                background: {PALETTE['panel']};
+                color: {PALETTE['text']};
+                border: 1px solid {PALETTE['border']};
+                border-radius: 6px;
+                padding: 4px 6px;
+                min-width: 220px;
+            }}
+            QComboBox QAbstractItemView {{
+                background: {PALETTE['panel']};
+                color: {PALETTE['text']};
+                selection-background-color: {PALETTE['primary']};
+            }}
+        """)
+        mode_l.addWidget(self.encoding_mode_combo)
+        mode_l.addStretch(1)
+
+        encoding_layout.addWidget(mode_row)
+
+        # Add tab to widget
+        self.tabs.addTab(self.encoding_tab, "Encoding")
+
+        # Storage for encoding checkboxes
+        self.encoding_checkboxes = {}   # {real_col_name: QCheckBox}
+
+
         main_scroll = QScrollArea()
         main_scroll.setWidgetResizable(True)
         main_scroll.setFrameShape(QFrame.NoFrame)
@@ -439,7 +579,8 @@ class DatasetCleaning_Window(QWidget):
             }}
             """
         )
-        self.apply_btn.clicked.connect(self.apply_only)
+
+        self.apply_btn.clicked.connect(self.apply_main_action)
         button_row.addWidget(self.apply_btn)
 
         self.save_btn = QPushButton("Save")
@@ -689,71 +830,64 @@ class DatasetCleaning_Window(QWidget):
         if df is None:
             self.show_msg(QMessageBox.Icon.Warning, "No Data", "No dataframe loaded.")
             return
-        
-        null_option = self.null_combo.currentText()
 
+        # --- Quality actions ---
+        null_option = self.null_combo.currentText()
         if null_option == "Drop rows with ANY null":
             df.dropna(how="any", inplace=True)
-
         elif null_option == "Drop rows with ALL nulls":
             df.dropna(how="all", inplace=True)
 
         dup_option = self.dup_combo.currentText()
-
         if dup_option == "Keep first occurrence":
             df.drop_duplicates(keep="first", inplace=True)
-
         elif dup_option == "Keep last occurrence":
             df.drop_duplicates(keep="last", inplace=True)
 
+        # --- Drop selected columns ---
         to_drop = [col for col, cb in self.drop_checkboxes.items() if cb.isChecked()]
         df.drop(columns=to_drop, inplace=True, errors="ignore")
-        
+
+        # --- Collect rename maps (column rename + value rename) ---
         rename_map = {}
         value_rename_map = {}
-        
+
         for col, edit_or_dict in self.rename_edits.items():
             if isinstance(edit_or_dict, dict):
                 value_rename_map[col] = {}
-
                 for old_val, edit in edit_or_dict.items():
                     new_val = edit.text().strip()
-
                     if new_val and new_val != old_val:
                         value_rename_map[col][old_val] = new_val
             else:
                 new = edit_or_dict.text().strip()
-
                 if new and new != col:
                     rename_map[col] = new
 
+        # --- Apply column rename to all dataframes ---
         if rename_map:
             for sheet, sdf in self.sheets_dfs.items():
                 sdf.rename(columns=rename_map, inplace=True)
-                
             if self.merged_df is not None:
                 self.merged_df.rename(columns=rename_map, inplace=True)
 
+        # --- Apply value rename_map for multi-value cells ---
         for col, val_map in value_rename_map.items():
             if not val_map:
                 continue
-            
+
             actual_col = rename_map.get(col, col)
-            
+
             for sheet, sdf in self.sheets_dfs.items():
                 if actual_col in sdf.columns:
-                    sdf[actual_col] = sdf[actual_col].apply(
-                    lambda x: self._apply_value_map(x, val_map)
-                )
-            
-            if self.merged_df is not None and actual_col in self.merged_df.columns:
-                self.merged_df[actual_col] = self.merged_df[actual_col].apply(
-                    lambda x: self._apply_value_map(x, val_map)
-                )
+                    sdf[actual_col] = sdf[actual_col].apply(lambda x: self._apply_value_map(x, val_map))
 
+            if self.merged_df is not None and actual_col in self.merged_df.columns:
+                self.merged_df[actual_col] = self.merged_df[actual_col].apply(lambda x: self._apply_value_map(x, val_map))
+
+        # --- Apply value edits panel replacements ---
         for col, edits in self.value_edits.items():
             replace_map = {}
-            
             for old_val, edit in edits.items():
                 new_val = edit.text().strip()
                 if new_val and new_val != old_val:
@@ -761,24 +895,19 @@ class DatasetCleaning_Window(QWidget):
 
             if replace_map:
                 actual_col = rename_map.get(col, col)
-                
+
                 for sheet, sdf in self.sheets_dfs.items():
                     if actual_col in sdf.columns:
-                        sdf[actual_col] = sdf[actual_col].apply(
-                            lambda x: self._apply_value_map(x, replace_map)
-                        )
+                        sdf[actual_col] = sdf[actual_col].apply(lambda x: self._apply_value_map(x, replace_map))
 
                 if self.merged_df is not None and actual_col in self.merged_df.columns:
-                    self.merged_df[actual_col] = self.merged_df[actual_col].apply(
-                        lambda x: self._apply_value_map(x, replace_map)
-                    )
+                    self.merged_df[actual_col] = self.merged_df[actual_col].apply(lambda x: self._apply_value_map(x, replace_map))
 
-
-        self.apply_one_hot_encoding()
-
+        # IMPORTANT: do NOT multi-hot encode here (keep dataset readable for UI)
         self.populate_drop_columns()
         self.show_msg(QMessageBox.Icon.Information, "Applied", "All changes applied successfully.")
         self.refresh_ui()
+
 
     def go_to_plot_frame(self):
         main_window = self.window()
@@ -995,10 +1124,14 @@ class DatasetCleaning_Window(QWidget):
         self.populate_drop_columns()
 
     def on_tab_changed(self, index: int):
-        is_wrangling_tab = (self.tabs.widget(index) is self.cleaning_tab)
-        
-        if is_wrangling_tab:
+        current_widget = self.tabs.widget(index)
+
+        if current_widget is self.cleaning_tab:
             self.populate_drop_columns()
+
+        elif hasattr(self, "encoding_tab") and current_widget is self.encoding_tab:
+            self.populate_encoding_columns()
+
 
     def _on_value_col_changed(self, index: int):
         if index < 0:
@@ -1071,6 +1204,7 @@ class DatasetCleaning_Window(QWidget):
             self.show_msg(QMessageBox.Icon.Warning, "No data", "No dataframe loaded.")
             return
 
+        # --- Quality actions ---
         null_option = self.null_combo.currentText()
         if null_option == "Drop rows with ANY null":
             df.dropna(how="any", inplace=True)
@@ -1083,10 +1217,12 @@ class DatasetCleaning_Window(QWidget):
         elif dup_option == "Keep last occurrence":
             df.drop_duplicates(keep="last", inplace=True)
 
+        # --- Drop columns ---
         to_drop = [col for col, cb in self.drop_checkboxes.items() if cb.isChecked()]
         if to_drop:
             df.drop(columns=to_drop, inplace=True, errors="ignore")
 
+        # --- Rename columns ---
         rename_map = {}
         for old, edit in self.rename_edits.items():
             new = edit.text().strip()
@@ -1096,8 +1232,10 @@ class DatasetCleaning_Window(QWidget):
         if rename_map:
             for sheet_name, sdf in self.sheets_dfs.items():
                 sdf.rename(columns=rename_map, inplace=True)
-            self.merged_df.rename(columns=rename_map, inplace=True)
+            if self.merged_df is not None:
+                self.merged_df.rename(columns=rename_map, inplace=True)
 
+        # --- Value mapping panel replacements ---
         for col, edits in self.value_edits.items():
             replace_map = {}
             for old_val, edit in edits.items():
@@ -1108,27 +1246,24 @@ class DatasetCleaning_Window(QWidget):
             if replace_map:
                 for sheet_name, sdf in self.sheets_dfs.items():
                     if col in sdf.columns:
-                        sdf[col] = sdf[col].replace(replace_map)
-                if col in self.merged_df.columns:
-                    self.merged_df[col] = self.merged_df[col].replace(replace_map)
-
-        sheets_final = {}
-
-        if len(self.sheets_dfs) > 1:
-            merged_final = self.merged_df
-            sheets_final = {name: df for name, df in self.sheets_dfs.items()}
-        else:
-            merged_final = None
-            sheets_final = self.sheets_dfs.copy()
+                        sdf[col] = sdf[col].apply(lambda x: self._apply_value_map(x, replace_map))
+                if self.merged_df is not None and col in self.merged_df.columns:
+                    self.merged_df[col] = self.merged_df[col].apply(lambda x: self._apply_value_map(x, replace_map))
 
         try:
-            self.apply_one_hot_encoding()
-            csv_folder = self.save_cleaned_csv()
+            # # --- Multi-hot encode (this changes self.merged_df in-place) ---
+            # merged_map = self.apply_multi_hot_encoding(drop_original=True)
+            # self._save_multi_hot_map(merged_map)
 
+            # Save CSVs AFTER encoding
+            csv_folder = self.save_cleaned_csv()
+            self.processed_path = csv_folder
+
+            # Save to DB using UPDATED dfs
             version, tables = self.db.save_run(
                 filename=self.loaded_filename,
-                merged_df=merged_final,
-                sheets=sheets_final
+                merged_df=self.merged_df,
+                sheets=self.sheets_dfs
             )
 
             table_list_str = "\n".join(tables)
@@ -1136,7 +1271,11 @@ class DatasetCleaning_Window(QWidget):
             self.show_msg(
                 QMessageBox.Icon.Information,
                 "Saved Successfully",
-                f"Version: v{version}\n\nSaved tables:\n{table_list_str}"
+                f"CSV files saved to:\n{csv_folder}\n\n"
+                f"Multi-hot map saved as:\n"
+                f"  - {Path(self.loaded_filename).stem}_multi_hot_map.json\n\n"
+                f"Database Version: v{version}\n\n"
+                f"Saved tables:\n{table_list_str}"
             )
 
         except Exception as e:
@@ -1149,6 +1288,7 @@ class DatasetCleaning_Window(QWidget):
 
         self.refresh_ui()
         self.go_to_plot_frame()
+
 
 
     def set_dataframes(self, merged_df: pd.DataFrame, sheets_dfs: dict):
@@ -1273,11 +1413,17 @@ class DatasetCleaning_Window(QWidget):
         if name == "All sheets (merged)" or not name:
             self.current_sheet = None
             self.current_df = self.merged_df
+
         else:
             self.current_sheet = name
             self.current_df = self.sheets_dfs.get(name, self.merged_df)
+
         self.show_columns()
         self.populate_drop_columns()
+        
+        if hasattr(self, "encoding_tab") and self.tabs.currentWidget() is self.encoding_tab:
+            self.populate_encoding_columns()
+
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -1621,67 +1767,95 @@ class DatasetCleaning_Window(QWidget):
         self.log("\n" + "=" * 80)
         self.log("STARTING SAVE TO DATABASE PROCESS")
         self.log("=" * 80)
-        
+
         if self.loaded_filename is None:
-            self.log("❌ ERROR: No filename assigned")
             self.show_msg(QMessageBox.Icon.Warning, "No File", "No filename assigned.")
             return
 
         if self.merged_df is None and not self.sheets_dfs:
-            self.log("❌ ERROR: No data to save")
             self.show_msg(QMessageBox.Icon.Warning, "Empty", "Nothing to save.")
             return
 
         try:
-            self.log(f"Loaded filename: {self.loaded_filename}")
-            self.log(f"Merged DF shape: {self.merged_df.shape if self.merged_df is not None else 'None'}")
-            self.log(f"Number of sheets: {len(self.sheets_dfs)}\n")
-            
-            merged_map = self.apply_one_hot_encoding()
-            sheet_maps = self.apply_one_hot_encoding_to_sheets()
-            
-            self._save_encoding_map(merged_map, sheet_maps)
-            
-            self.log("Saving CSV files...")
+            # Save CSVs first
             csv_folder = self.save_cleaned_csv()
             self.processed_path = csv_folder
-            self.log(f"✓ CSV files saved to: {csv_folder}\n")
-            
-            self.log("Calling database save...")
+
+            # DB save
             version, tables = self.db.save_run(
                 filename=self.loaded_filename,
                 merged_df=self.merged_df,
                 sheets=self.sheets_dfs
             )
-            
-            self.log(f"✓ Database save successful")
-            self.log(f"  Version: v{version}")
-            self.log(f"  Tables saved: {', '.join(tables)}")
-            self.log("=" * 80 + "\n")
-            
+
+            try:
+                self.run_backup_and_push()
+            except Exception as e:
+                self.show_msg(QMessageBox.Icon.Warning,
+                            "Saved to DB but GitHub push failed",
+                            str(e))
+
             table_list_str = "\n".join(tables)
-            
             self.show_msg(
                 QMessageBox.Icon.Information,
                 "Saved Successfully",
                 f"CSV files saved to:\n{csv_folder}\n\n"
-                f"Binary encoding map saved as:\n"
-                f"  - {Path(self.loaded_filename).stem}_binary_encoding_map.json\n"
-                f"  - {Path(self.loaded_filename).stem}_binary_encoding_map.txt\n\n"
                 f"Database Version: v{version}\n\n"
                 f"Saved tables:\n{table_list_str}"
             )
-            
+
             self.go_to_plot_frame()
-            
+
         except Exception as e:
-            self.log(f"❌ SAVE ERROR: {e}")
-            self.log(f"   Traceback: {traceback.format_exc()}")
+            self.log(f"❌ DB SAVE ERROR: {e}")
+            self.log(traceback.format_exc())
+
+            msg = str(e).lower()
+
+            # Friendly messages for typical SQL problems
+            if "sql" in msg and ("syntax" in msg or "near" in msg):
+                friendly = (
+                    "Database save failed because some column names are not SQL-safe.\n\n"
+                    "Fix: Use the Encoding tab (it now makes SQL-safe column names), then save again."
+                )
+            elif "too many columns" in msg:
+                friendly = (
+                    "Database save failed because the table has too many columns.\n\n"
+                    "Fix: Encode fewer columns at a time, or use BITMASK mode for multi-value columns."
+                )
+            elif "duplicate column" in msg or "already exists" in msg:
+                friendly = (
+                    "Database save failed due to duplicate column names.\n\n"
+                    "Fix: Re-encode (the new encoder prevents collisions), then save again."
+                )
+            else:
+                friendly = "Database save failed due to an unexpected error."
+
             self.show_msg(
                 QMessageBox.Icon.Critical,
                 "Save Error",
-                f"Failed to save dataset:\n{e}"
+                f"{friendly}\n\nTechnical details:\n{e}"
             )
+
+    def run_backup_and_push(self):
+        base_dir = Path(self.get_app_dir()).resolve()
+        repo_dir = base_dir / "DB_Cerebrox"
+        bat_path = repo_dir / "run_backup.bat"
+
+        if not bat_path.exists():
+            raise FileNotFoundError(f"run_backup.bat not found at:\n{bat_path}")
+
+        p = subprocess.run(
+            ["cmd.exe", "/c", str(bat_path)],
+            cwd=str(repo_dir),
+            capture_output=True,
+            text=True
+        )
+
+        if p.returncode != 0:
+            raise RuntimeError(p.stderr or p.stdout or f"Backup failed with code {p.returncode}")
+
+
 
     def apply_one_hot_encoding_to_sheets(self):
         self.log("=" * 60)
@@ -1778,3 +1952,812 @@ class DatasetCleaning_Window(QWidget):
         self.log("=" * 60 + "\n")
         
         return all_encoding_maps
+
+    def apply_multi_hot_encoding(self, drop_original: bool = True, sparse: bool = True, only_columns=None):
+        """
+        Backward compatible: encodes self.merged_df in place (but uses helper internally).
+        """
+        if self.merged_df is None or self.merged_df.empty:
+            self.log("⚠️ No merged_df to encode - SKIPPING")
+            return {}
+
+        df_copy = self.merged_df.copy()
+        encoded_df, enc_map = self._multi_hot_encode_df(
+            df_copy,
+            drop_original=drop_original,
+            only_columns=only_columns
+        )
+        self.merged_df = encoded_df
+        return enc_map
+
+    def _save_multi_hot_map(self, encoding_map: dict):
+        if not self.loaded_filename or not encoding_map:
+            return
+
+        base_path = Path(self.loaded_filename).parent
+        base_name = Path(self.loaded_filename).stem
+        out_folder = base_path / f"{base_name}_cleaned"
+        out_folder.mkdir(exist_ok=True)
+
+        out_path = out_folder / f"{base_name}_multi_hot_map.json"
+        payload = {
+            "filename": self.loaded_filename,
+            "encoding_date": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "encoding_map": encoding_map
+        }
+
+        with open(out_path, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
+
+        self.log(f"✓ Saved multi-hot map to: {out_path}")
+
+
+    # =========================
+    # Encoding Tab Helpers (NEW)
+    # =========================
+    def _clear_encoding_layout(self):
+        while self.encoding_inner_layout.count():
+            item = self.encoding_inner_layout.takeAt(0)
+            w = item.widget()
+            if w is not None:
+                w.deleteLater()
+        self.encoding_checkboxes.clear()
+
+    def _toggle_all_encoding_columns(self, state):
+        checked = (state == Qt.Checked)
+        for cb in self.encoding_checkboxes.values():
+            cb.setChecked(checked)
+
+    # def populate_encoding_columns(self):
+    #     """
+    #     Shows ONLY columns that are:
+    #     - dtype object
+    #     - contain multi-value separators (، or ,)
+    #     Supports search filter.
+    #     """
+    #     df = self.current_df if self.current_df is not None else self.merged_df
+    #     self._clear_encoding_layout()
+
+    #     if df is None or df.empty:
+    #         return
+
+    #     query = (self.encoding_search.text() if hasattr(self, "encoding_search") else "") or ""
+    #     query = query.strip().lower()
+
+    #     # Only object columns + multi-value candidates
+    #     candidate_cols = []
+    #     obj_cols = list(df.select_dtypes(include="object").columns)
+
+    #     for col in obj_cols:
+    #         s = df[col].dropna().astype(str)
+    #         if s.empty:
+    #             continue
+    #         if s.str.contains(r"(،|,)\s*").any():
+    #             candidate_cols.append(col)
+
+    #     # Apply search filter
+    #     for col in candidate_cols:
+    #         col_str = str(col)
+    #         if query and query not in col_str.lower():
+    #             continue
+
+    #         cb = QCheckBox(col_str)
+    #         cb.setStyleSheet(f"""
+    #             QCheckBox {{
+    #                 color: {PALETTE['text']};
+    #                 spacing: 8px;
+    #                 font-size: 13px;
+    #                 padding: 4px 0px;
+    #             }}
+    #             QCheckBox::indicator {{
+    #                 width: 16px;
+    #                 height: 16px;
+    #                 border: 1px solid {PALETTE['border']};
+    #                 border-radius: 3px;
+    #             }}
+    #             QCheckBox::indicator:hover {{
+    #                 border: 1px solid {PALETTE['primary']};
+    #             }}
+    #             QCheckBox::indicator:checked {{
+    #                 background: {PALETTE['primary']};
+    #                 border: 1px solid {PALETTE['primary']};
+    #             }}
+    #         """)
+    #         self.encoding_inner_layout.addWidget(cb)
+    #         self.encoding_checkboxes[col] = cb
+
+    #     self.encoding_inner_layout.addStretch(1)
+
+    #     # Keep "Select all" checkbox consistent with current view
+    #     if hasattr(self, "encoding_select_all"):
+    #         self.encoding_select_all.blockSignals(True)
+    #         self.encoding_select_all.setChecked(False)
+    #         self.encoding_select_all.blockSignals(False)
+
+    def populate_encoding_columns(self):
+        """
+        Shows ALL object columns (single-value + multi-value).
+        - Multi-value columns are marked with [MULTI]
+        Supports search filter.
+        """
+        df = self.current_df if self.current_df is not None else self.merged_df
+        self._clear_encoding_layout()
+
+        if df is None or df.empty:
+            return
+
+        query = (self.encoding_search.text() if hasattr(self, "encoding_search") else "") or ""
+        query = query.strip().lower()
+
+        obj_cols = list(df.select_dtypes(include="object").columns)
+
+        for col in obj_cols:
+            col_str = str(col)
+            if query and query not in col_str.lower():
+                continue
+
+            is_multi = self._is_multi_value_column(df[col])
+            display = f"{col_str}  [MULTI]" if is_multi else col_str
+
+            cb = QCheckBox(display)
+            cb.setStyleSheet(f"""
+                QCheckBox {{
+                    color: {PALETTE['text']};
+                    spacing: 8px;
+                    font-size: 13px;
+                    padding: 4px 0px;
+                }}
+                QCheckBox::indicator {{
+                    width: 16px;
+                    height: 16px;
+                    border: 1px solid {PALETTE['border']};
+                    border-radius: 3px;
+                }}
+                QCheckBox::indicator:hover {{
+                    border: 1px solid {PALETTE['primary']};
+                }}
+                QCheckBox::indicator:checked {{
+                    background: {PALETTE['primary']};
+                    border: 1px solid {PALETTE['primary']};
+                }}
+            """)
+            self.encoding_inner_layout.addWidget(cb)
+
+            # store real column name as key
+            self.encoding_checkboxes[col] = cb
+
+        self.encoding_inner_layout.addStretch(1)
+
+        if hasattr(self, "encoding_select_all"):
+            self.encoding_select_all.blockSignals(True)
+            self.encoding_select_all.setChecked(False)
+            self.encoding_select_all.blockSignals(False)
+
+
+    # def apply_selected_encoding(self):
+    #     """
+    #     Applies multi-hot encoding ONLY to selected columns,
+    #     and applies it to:
+    #     - the currently selected sheet dataframe (if a sheet is selected)
+    #     - otherwise, the merged dataframe
+    #     """
+    #     df = self.current_df if self.current_df is not None else self.merged_df
+    #     if df is None or df.empty:
+    #         self.show_msg(QMessageBox.Icon.Warning, "No Data", "No dataframe loaded.")
+    #         return
+
+    #     selected_cols = [col for col, cb in self.encoding_checkboxes.items() if cb.isChecked()]
+    #     if not selected_cols:
+    #         self.show_msg(QMessageBox.Icon.Warning, "No Columns Selected",
+    #                     "Please select at least one column to encode.")
+    #         return
+
+    #     # Decide target: sheet or merged
+    #     is_sheet = bool(self.current_sheet and self.current_sheet in self.sheets_dfs)
+    #     target_name = self.current_sheet if is_sheet else "All sheets (merged)"
+
+    #     try:
+    #         # Encode on a COPY to avoid weird reference side-effects
+    #         df_copy = df.copy()
+
+    #         # Run encoding on df_copy without touching self.merged_df as a workspace
+    #         encoded_df, enc_map = self._multi_hot_encode_df(
+    #             df_copy,
+    #             drop_original=True,
+    #             only_columns=selected_cols
+    #         )
+
+    #         if not enc_map:
+    #             self.show_msg(QMessageBox.Icon.Information, "No Encoding Applied",
+    #                         "None of the selected columns contain multi-value data (comma/Arabic comma).")
+    #             return
+
+    #         # Save mapping (optional: per sheet naming could be improved later)
+    #         self._save_multi_hot_map(enc_map)
+
+    #         # Write back to correct place
+    #         if is_sheet:
+    #             self.sheets_dfs[self.current_sheet] = encoded_df
+    #             self.current_df = self.sheets_dfs[self.current_sheet]
+    #         else:
+    #             self.merged_df = encoded_df
+    #             self.current_df = self.merged_df
+
+    #         self.show_msg(
+    #             QMessageBox.Icon.Information,
+    #             "Encoding Applied",
+    #             f"Sheet: {target_name}\nEncoded {len(enc_map)} column(s).\nOnly selected columns were encoded."
+    #         )
+
+    #         # UI refresh + lists update
+    #         self.refresh_ui()
+    #         self.populate_drop_columns()
+    #         self.populate_encoding_columns()
+
+    #     except Exception as e:
+    #         self.show_msg(QMessageBox.Icon.Critical, "Encoding Error", str(e))
+
+    def apply_selected_encoding(self):
+        """
+        HYBRID encoding for selected columns:
+        - If column contains multi-values (comma/Arabic comma): multi-hot (default) OR bitmask if user chose it
+        - Else single categorical:
+            * 2 unique -> binary label encoding (0/1)
+            * >2 unique -> one-hot encoding
+        Also does safe SQL-friendly column naming + friendly error messages.
+        """
+        df = self.current_df if self.current_df is not None else self.merged_df
+        if df is None or df.empty:
+            self.show_msg(QMessageBox.Icon.Warning, "No Data", "No dataframe loaded.")
+            return
+
+        selected_cols = [col for col, cb in self.encoding_checkboxes.items() if cb.isChecked()]
+        if not selected_cols:
+            self.show_msg(QMessageBox.Icon.Warning, "No Columns Selected",
+                        "Please select at least one column to encode.")
+            return
+
+        # Decide target: sheet or merged
+        is_sheet = bool(self.current_sheet and self.current_sheet in self.sheets_dfs)
+        target_name = self.current_sheet if is_sheet else "All sheets (merged)"
+
+        try:
+            # Work on a copy to prevent weird Qt/DataFrame reference issues
+            df_copy = df.copy()
+
+            # Decide encoding mode (Auto / Force choices)
+            mode = "AUTO"
+            if hasattr(self, "encoding_mode_combo"):
+                mode = (self.encoding_mode_combo.currentText() or "AUTO").strip().upper()
+
+            # Apply hybrid encoding
+            encoded_df, enc_map, report = self._hybrid_encode_df(
+                df_copy,
+                selected_cols=selected_cols,
+                mode=mode
+            )
+
+            if not enc_map:
+                self.show_msg(QMessageBox.Icon.Information, "No Encoding Applied",
+                            "No suitable encoding was applied.\n\n"
+                            "Tip: Make sure the selected columns are categorical (text) or multi-value columns.")
+                return
+
+            # Save mapping
+            self._save_hybrid_encoding_map(enc_map)
+
+            # Write back to correct place
+            if is_sheet:
+                self.sheets_dfs[self.current_sheet] = encoded_df
+                self.current_df = self.sheets_dfs[self.current_sheet]
+            else:
+                self.merged_df = encoded_df
+                self.current_df = self.merged_df
+
+            # Friendly success message
+            summary_lines = [
+                f"Sheet: {target_name}",
+                f"Encoded columns: {len(enc_map)}",
+                "",
+                "What happened:"
+            ] + report[:30]  # avoid super long popup
+
+            if len(report) > 30:
+                summary_lines.append(f"... (+{len(report) - 30} more)")
+
+            self.show_msg(
+                QMessageBox.Icon.Information,
+                "Encoding Applied",
+                "\n".join(summary_lines)
+            )
+
+            # Refresh UI lists
+            self.refresh_ui()
+            self.populate_drop_columns()
+            self.populate_encoding_columns()
+
+        except Exception as e:
+            self._show_friendly_encoding_error(e)
+
+
+    # def _multi_hot_encode_df(self, df: pd.DataFrame, drop_original: bool = True, only_columns=None):
+    #     """
+    #     Multi-hot encode on a PROVIDED dataframe (no self.merged_df usage).
+    #     Returns: (encoded_df, encoding_map)
+    #     """
+    #     if df is None or df.empty:
+    #         return df, {}
+
+    #     encoding_map = {}
+
+    #     # Detect multi-value columns
+    #     multi_cols = []
+    #     for col in df.columns:
+    #         if only_columns is not None and col not in only_columns:
+    #             continue
+
+    #         if df[col].dtype == "object":
+    #             s = df[col].dropna().astype(str)
+    #             if not s.empty and s.str.contains(r"(،|,)\s*").any():
+    #                 multi_cols.append(col)
+
+    #     if not multi_cols:
+    #         return df, {}
+
+    #     def safe_token_name(token: str) -> str:
+    #         token = str(token).strip()
+    #         token = re.sub(r"\s+", "_", token)
+    #         token = re.sub(r"[^\w\u0600-\u06FF]+", "_", token)
+    #         return token.strip("_")
+
+    #     for col in multi_cols:
+    #         self.log(f"Multi-hot encoding column: {col}")
+
+    #         labels_series = df[col].apply(
+    #             lambda x: [p.strip() for p in self._split_respecting_parentheses(x) if p.strip()]
+    #             if pd.notna(x) else []
+    #         )
+
+    #         uniques = sorted({lab for row in labels_series for lab in row})
+    #         if not uniques:
+    #             self.log(f"  ⚠️ No labels found in {col} - SKIPPING")
+    #             continue
+
+    #         mat = np.zeros((len(df), len(uniques)), dtype=np.uint8)
+    #         idx = {lab: i for i, lab in enumerate(uniques)}
+
+    #         for r, row_labels in enumerate(labels_series):
+    #             for lab in row_labels:
+    #                 mat[r, idx[lab]] = 1
+
+    #         new_cols = []
+    #         for i, lab in enumerate(uniques):
+    #             new_name = f"{col}__{safe_token_name(lab)}"
+    #             df[new_name] = mat[:, i]
+    #             new_cols.append(new_name)
+
+    #         if drop_original:
+    #             df.drop(columns=[col], inplace=True, errors="ignore")
+
+    #         encoding_map[col] = {
+    #             "type": "multi_hot",
+    #             "new_columns": new_cols,
+    #             "labels": uniques
+    #         }
+
+    #         self.log(f"  ✓ Created {len(new_cols)} columns for {col}")
+
+    #     return df, encoding_map
+
+    def _multi_hot_encode_df(self, df: pd.DataFrame, drop_original: bool = True, only_columns=None):
+        """
+        Safer multi-hot encoder:
+        - SQL-safe column naming
+        - guaranteed unique column names
+        - keeps Arabic letters but removes SQL-breaking punctuation like / ? etc
+        """
+        if df is None or df.empty:
+            return df, {}
+
+        df = df.copy()
+        encoding_map = {}
+        used_cols = set(df.columns)
+
+        # detect multi-value columns
+        multi_cols = []
+        for col in df.columns:
+            if only_columns is not None and col not in only_columns:
+                continue
+            if self._is_multi_value_column(df[col]):
+                multi_cols.append(col)
+
+        if not multi_cols:
+            return df, {}
+
+        for col in multi_cols:
+            self.log(f"Multi-hot encoding column: {col}")
+
+            new_cols, labels, created = self._multi_hot_encode_series(df[col], col, used_cols)
+            if not created:
+                self.log(f"  ⚠️ No labels found in {col} - SKIPPING")
+                continue
+
+            for nc, values in new_cols.items():
+                df[nc] = values
+
+            if drop_original:
+                df.drop(columns=[col], inplace=True, errors="ignore")
+
+            encoding_map[str(col)] = {
+                "type": "multi_hot",
+                "new_columns": created,
+                "labels": labels
+            }
+
+            self.log(f"  ✓ Created {len(created)} columns for {col}")
+
+        return df, encoding_map
+
+    def _show_friendly_encoding_error(self, e: Exception):
+        msg = str(e)
+
+        # Common pandas / encoding issues
+        if "cannot reindex" in msg.lower():
+            nice = "Encoding failed because the dataframe index/columns got out of sync."
+        elif "duplicate" in msg.lower() and "columns" in msg.lower():
+            nice = "Encoding failed because it tried to create duplicate column names."
+        else:
+            nice = "Encoding failed due to an unexpected error."
+
+        self.log(f"❌ ENCODING ERROR: {e}")
+        self.log(traceback.format_exc())
+
+        self.show_msg(
+            QMessageBox.Icon.Critical,
+            "Encoding Error",
+            f"{nice}\n\nTechnical details:\n{e}"
+        )
+
+
+    def _is_multi_value_column(self, s: pd.Series) -> bool:
+        """True if series contains multi-value separator in any non-null cell."""
+        if s is None:
+            return False
+        if s.dtype != "object":
+            return False
+        ss = s.dropna().astype(str)
+        if ss.empty:
+            return False
+        return ss.str.contains(r"(،|,)\s*").any()
+
+
+    def _safe_sql_identifier(self, name: str) -> str:
+        """
+        Make column names DB-safe:
+        - replace spaces with _
+        - remove punctuation like / ? etc
+        - keep Arabic letters and digits and underscore
+        - ensure not empty and not starting with digit
+        """
+        name = str(name).strip()
+        name = re.sub(r"\s+", "_", name)
+
+        # keep: letters/digits/_ and Arabic range
+        name = re.sub(r"[^\w\u0600-\u06FF]+", "_", name)
+        name = name.strip("_")
+
+        if not name:
+            name = "col"
+
+        if re.match(r"^\d", name):
+            name = f"c_{name}"
+
+        # optional: limit length for DB friendliness
+        if len(name) > 80:
+            name = name[:80]
+
+        return name
+
+
+    def _make_unique_name(self, base: str, used: set) -> str:
+        """Ensure no collisions."""
+        if base not in used:
+            used.add(base)
+            return base
+        k = 2
+        while True:
+            candidate = f"{base}__{k}"
+            if candidate not in used:
+                used.add(candidate)
+                return candidate
+            k += 1
+
+
+    def _binary_label_encode_series(self, s: pd.Series):
+        """
+        Binary encode 2 unique (non-null) values into 0/1.
+        Returns (encoded_series, mapping_dict)
+        """
+        vals = [v for v in s.dropna().unique()]
+        # keep stable order
+        vals = list(map(lambda x: str(x), vals))
+        vals = list(dict.fromkeys(vals))
+
+        mapping = {vals[0]: 0, vals[1]: 1} if len(vals) == 2 else {}
+        def enc(x):
+            if pd.isna(x):
+                return np.nan
+            key = str(x)
+            return mapping.get(key, np.nan)
+
+        out = s.map(enc).astype("float")  # keep NaN allowed
+        return out, mapping
+
+
+    def _one_hot_encode_series(self, s: pd.Series, base_col: str, used_cols: set):
+        """
+        One-hot encode single-category column.
+        Returns (new_df_cols_dict, labels)
+        """
+        ss = s.fillna("__MISSING__").astype(str)
+        labels = sorted(ss.unique())
+
+        new_cols = {}
+        for lab in labels:
+            safe_base = self._safe_sql_identifier(base_col)
+            safe_lab = self._safe_sql_identifier(lab)
+            col_name = self._make_unique_name(f"{safe_base}__{safe_lab}", used_cols)
+            new_cols[col_name] = (ss == lab).astype(np.uint8)
+
+        return new_cols, labels
+
+
+    def _multi_hot_encode_series(self, s: pd.Series, base_col: str, used_cols: set, drop_original=True):
+        """
+        Multi-hot encode multi-value cells into multiple 0/1 columns.
+        Returns (new_cols_dict, labels, created_colnames)
+        """
+        labels_series = s.apply(
+            lambda x: [p.strip() for p in self._split_respecting_parentheses(x) if p.strip()]
+            if pd.notna(x) else []
+        )
+        uniques = sorted({lab for row in labels_series for lab in row})
+        if not uniques:
+            return {}, [], []
+
+        mat = np.zeros((len(s), len(uniques)), dtype=np.uint8)
+        idx = {lab: i for i, lab in enumerate(uniques)}
+
+        for r, row_labels in enumerate(labels_series):
+            for lab in row_labels:
+                mat[r, idx[lab]] = 1
+
+        new_cols = {}
+        created = []
+        safe_base = self._safe_sql_identifier(base_col)
+
+        for i, lab in enumerate(uniques):
+            safe_lab = self._safe_sql_identifier(lab)
+            col_name = self._make_unique_name(f"{safe_base}__{safe_lab}", used_cols)
+            new_cols[col_name] = mat[:, i]
+            created.append(col_name)
+
+        return new_cols, uniques, created
+
+
+    def _bitmask_encode_series(self, s: pd.Series):
+        """
+        Compact numeric encoding for multi-value cells:
+        each label gets a bit position -> output integer bitmask.
+        Returns (encoded_series_int, labels_in_order)
+        """
+        labels_series = s.apply(
+            lambda x: [p.strip() for p in self._split_respecting_parentheses(x) if p.strip()]
+            if pd.notna(x) else []
+        )
+        uniques = sorted({lab for row in labels_series for lab in row})
+        if not uniques:
+            return None, []
+
+        idx = {lab: i for i, lab in enumerate(uniques)}
+
+        def enc(row_labels):
+            total = 0
+            for lab in row_labels:
+                total |= (1 << idx[lab])
+            return total
+
+        out = labels_series.map(enc).astype(np.int64)
+        return out, uniques
+
+
+    def _hybrid_encode_df(self, df: pd.DataFrame, selected_cols: list, mode: str = "AUTO"):
+        """
+        mode:
+        - AUTO (recommended)
+        - FORCE_LABEL   -> label/binary (2 uniques) else one-hot
+        - FORCE_ONEHOT  -> one-hot even if 2 uniques
+        - FORCE_MULTIHOT-> multi-hot (requires multi-value)
+        - FORCE_BITMASK -> bitmask int (requires multi-value)
+        Returns: (df_encoded, encoding_map, report_lines)
+        """
+        df = df.copy()
+        encoding_map = {}
+        report = []
+
+        used_cols = set(df.columns)
+
+        for col in selected_cols:
+            if col not in df.columns:
+                report.append(f"• Skipped '{col}' (not found).")
+                continue
+
+            s = df[col]
+            is_multi = self._is_multi_value_column(s)
+
+            # ---------- MULTI VALUE ----------
+            if is_multi:
+                if mode == "FORCE_BITMASK":
+                    encoded, labels = self._bitmask_encode_series(s)
+                    if encoded is None:
+                        report.append(f"• '{col}': no labels found (skipped).")
+                        continue
+
+                    safe_col = self._safe_sql_identifier(col)
+                    safe_col = self._make_unique_name(f"{safe_col}__BITMASK", used_cols)
+
+                    df[safe_col] = encoded
+                    df.drop(columns=[col], inplace=True, errors="ignore")
+
+                    encoding_map[str(col)] = {
+                        "type": "bitmask",
+                        "new_column": safe_col,
+                        "labels": labels
+                    }
+                    report.append(f"✓ '{col}': multi-value → BITMASK int (1 column).")
+                    continue
+
+                # AUTO or FORCE_MULTIHOT
+                if mode in ("AUTO", "FORCE_MULTIHOT"):
+                    new_cols, labels, created = self._multi_hot_encode_series(s, col, used_cols)
+                    if not created:
+                        report.append(f"• '{col}': no labels found (skipped).")
+                        continue
+
+                    for nc, values in new_cols.items():
+                        df[nc] = values
+
+                    df.drop(columns=[col], inplace=True, errors="ignore")
+
+                    encoding_map[str(col)] = {
+                        "type": "multi_hot",
+                        "new_columns": created,
+                        "labels": labels
+                    }
+                    report.append(f"✓ '{col}': multi-value → MULTI-HOT ({len(created)} columns).")
+                    continue
+
+                # If forced label/onehot on multi-value, warn and skip
+                report.append(f"• '{col}': multi-value column, but mode '{mode}' doesn't support it (skipped).")
+                continue
+
+            # ---------- SINGLE VALUE ----------
+            # Work with unique non-null categories
+            uniques = [v for v in s.dropna().astype(str).unique()]
+            uniques = list(dict.fromkeys(uniques))
+            n_uniques = len(uniques)
+
+            if n_uniques == 0:
+                report.append(f"• '{col}': only nulls (skipped).")
+                continue
+
+            # FORCE_ONEHOT always one-hot
+            if mode == "FORCE_ONEHOT":
+                new_cols, labels = self._one_hot_encode_series(s, col, used_cols)
+                for nc, ser in new_cols.items():
+                    df[nc] = ser
+                df.drop(columns=[col], inplace=True, errors="ignore")
+
+                encoding_map[str(col)] = {
+                    "type": "one_hot",
+                    "new_columns": list(new_cols.keys()),
+                    "labels": labels
+                }
+                report.append(f"✓ '{col}': single-value → ONE-HOT ({len(new_cols)} columns).")
+                continue
+
+            # AUTO or FORCE_LABEL:
+            # 2 uniques -> binary label; else -> one-hot
+            if n_uniques == 2 and mode in ("AUTO", "FORCE_LABEL"):
+                encoded, mapping = self._binary_label_encode_series(s)
+
+                safe_col = self._safe_sql_identifier(col)
+                safe_col = self._make_unique_name(safe_col, used_cols)
+
+                df[safe_col] = encoded.astype("Int64")  # nullable int
+                df.drop(columns=[col], inplace=True, errors="ignore")
+
+                encoding_map[str(col)] = {
+                    "type": "binary_label",
+                    "new_column": safe_col,
+                    "mapping": mapping
+                }
+                report.append(f"✓ '{col}': 2 values → BINARY LABEL (0/1).")
+                continue
+
+            # otherwise one-hot
+            new_cols, labels = self._one_hot_encode_series(s, col, used_cols)
+            for nc, ser in new_cols.items():
+                df[nc] = ser
+            df.drop(columns=[col], inplace=True, errors="ignore")
+
+            encoding_map[str(col)] = {
+                "type": "one_hot",
+                "new_columns": list(new_cols.keys()),
+                "labels": labels
+            }
+            report.append(f"✓ '{col}': {n_uniques} values → ONE-HOT ({len(new_cols)} columns).")
+
+        return df, encoding_map, report
+
+
+    def _save_hybrid_encoding_map(self, encoding_map: dict):
+        """
+        Saves ONE file and merges with existing mapping (so it doesn't overwrite previous encodes).
+        """
+        if not self.loaded_filename or not encoding_map:
+            return
+
+        base_path = Path(self.loaded_filename).parent
+        base_name = Path(self.loaded_filename).stem
+        out_folder = base_path / f"{base_name}_cleaned"
+        out_folder.mkdir(exist_ok=True)
+
+        out_path = out_folder / f"{base_name}_encoding_map.json"
+
+        payload = {
+            "filename": self.loaded_filename,
+            "encoding_date": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "encoding_map": {}
+        }
+
+        if out_path.exists():
+            try:
+                payload = json.loads(out_path.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+
+        payload["encoding_date"] = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
+        payload.setdefault("encoding_map", {})
+        payload["encoding_map"].update(encoding_map)
+
+        out_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        self.log(f"✓ Updated encoding map: {out_path}")
+
+
+    def apply_main_action(self):
+        """
+        Single 'Apply' button behavior (the one near Save):
+        - If user is currently on Encoding tab -> apply encoding
+        - Otherwise -> apply normal cleaning (drop/rename/value mapping)
+        """
+        try:
+            current_widget = self.tabs.currentWidget()
+
+            # If on encoding tab, run encoding
+            if hasattr(self, "encoding_tab") and current_widget is self.encoding_tab:
+                self.apply_selected_encoding()
+                return
+
+            # Otherwise normal Apply behavior
+            self.apply_only()
+
+        except Exception as e:
+            self.log(f"❌ APPLY MAIN ACTION ERROR: {e}")
+            self.log(traceback.format_exc())
+            self.show_msg(
+                QMessageBox.Icon.Critical,
+                "Apply Error",
+                f"Failed to apply changes.\n\nTechnical details:\n{e}"
+            )
+

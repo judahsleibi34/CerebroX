@@ -25,3 +25,5 @@ dist/
 
 # Ignore SQLite database files
 *.db
+logs/
+
