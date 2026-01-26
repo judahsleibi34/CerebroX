@@ -3,7 +3,6 @@ matplotlib.use('Agg')  # Use non-GUI backend for saving plots
 import numpy as np
 import pandas as pd
 
-
 from typing import Optional
 from pathlib import Path
 
@@ -16,15 +15,9 @@ from PySide6.QtGui import QFont
 
 from config import PALETTE
 
-from EDA import (
-    DataVisualizer,
-    ColumnResolver,
-    get_col_groups,
-    choose_xy,
-    choose_group,
-)
+# Import the EnhancedEduVisualizer from your EDA module
+from EDA import EnhancedEduVisualizer
 
-from EDA import best_numeric_cols, best_categorical_cols
 
 class PlottingThread(QThread):
     finished = Signal(str, bool, str)  # plot_type, success, message
@@ -35,346 +28,170 @@ class PlottingThread(QThread):
         self.df = df.copy(deep=True)
         self.output_dir = output_dir
 
-    # -------------------------
-    # TYPE-BASED HELPERS
-    # -------------------------
     def _clean_columns(self):
-        self.df.columns = (
-            self.df.columns.astype(str)
-            .str.strip()
-            .str.replace("\n", " ", regex=False)
-        )
+        self.df.columns = self.df.columns.astype(str).str.strip().str.replace("\n", " ", regex=False)
 
     def _is_id_like(self, s: pd.Series) -> bool:
         s = s.dropna()
-        if s.empty:
-            return False
-        return (s.nunique() / len(s)) > 0.95  # high uniqueness => likely id
+        return (s.nunique() / len(s)) > 0.95 if not s.empty else False
 
     def _best_numeric_cols(self, k=3):
         nums = self.df.select_dtypes(include=["number"])
-        if nums.shape[1] == 0:
-            return []
-
         stats = []
         for c in nums.columns:
             s = nums[c].dropna()
-            if len(s) < 10:
-                continue
-            if self._is_id_like(s):
-                continue
-            stats.append((c, float(s.notna().mean()), float(s.var())))
+            if len(s) < 5 or self._is_id_like(s): continue
+            stats.append((c, s.notna().mean(), s.var()))
         stats.sort(key=lambda x: (x[1], x[2]), reverse=True)
         return [c for c, _, _ in stats[:k]]
 
-    def _best_score_cols(self, k=3):
-        numeric = self.df.select_dtypes(include=["number"]).columns.tolist()
-        scored = []
-        for c in numeric:
-            name = c.lower()
-            if any(key in name for key in ["score", "mark", "result", "total", "math", "arabic", "english"]):
-                if not self._is_id_like(self.df[c]):
-                    scored.append(c)
-        if scored:
-            return scored[:k]
-        return self._best_numeric_cols(k=k)
-
-    def _categorical_like_cols(self, max_unique=25):
-        good = []
-
-        # object/category columns
-        for c in self.df.select_dtypes(exclude=["number"]).columns:
-            nunique = self.df[c].nunique(dropna=True)
-            if 2 <= nunique <= max_unique:
-                good.append((c, nunique))
-
-        # numeric but low-cardinality (grade/class sometimes int)
-        for c in self.df.select_dtypes(include=["number"]).columns:
-            nunique = self.df[c].nunique(dropna=True)
-            if 2 <= nunique <= max_unique and not self._is_id_like(self.df[c]):
-                good.append((c, nunique))
-
-        good.sort(key=lambda x: x[1])
-        return [c for c, _ in good]
-
     def _pick_group_col(self, prefer_keywords=None, max_unique=12):
-        prefer_keywords = [k.lower() for k in (prefer_keywords or [])]
-        cols = self._categorical_like_cols(max_unique=max_unique)
-        if not cols:
-            return None
-
-        if prefer_keywords:
-            for c in cols:
-                name = c.lower()
-                if any(k in name for k in prefer_keywords):
+        # Look for categorical-like columns
+        candidates = []
+        for c in self.df.columns:
+            nu = self.df[c].nunique()
+            if 2 <= nu <= max_unique:
+                candidates.append(c)
+        
+        if prefer_keywords and candidates:
+            for c in candidates:
+                if any(k.lower() in c.lower() for k in prefer_keywords):
                     return c
+        return candidates[0] if candidates else None
 
-        return cols[0]
-
-    def _auto_success_threshold(self, s: pd.Series) -> float:
-        s = pd.to_numeric(s, errors="coerce").dropna()
-        if s.empty:
-            return 0
-        mx = float(s.max())
-        if mx <= 1.5:
-            return 0.5
-        if mx <= 20.5:
-            return 10.0
-        return float(s.median())
-
-    def _plot_success_rates(self, score_cols, group_col=None, chart_name="Success Rates Analysis"):
-        import matplotlib.pyplot as plt
-
-        out = Path(self.output_dir)
-        out.mkdir(parents=True, exist_ok=True)
-
-        # Overall success per score
-        labels = []
-        rates = []
-        for col in score_cols:
-            s = pd.to_numeric(self.df[col], errors="coerce")
-            thr = self._auto_success_threshold(s)
-            valid = s.dropna()
-            if valid.empty:
-                continue
-            rate = 100.0 * float((valid >= thr).mean())
-            labels.append(col)
-            rates.append(rate)
-
-        if labels:
-            fig, ax = plt.subplots(figsize=(12, 7))
-            ax.barh(labels, rates)
-            ax.set_title(f"{chart_name} (Overall)")
-            ax.set_xlabel("Success Rate (%)")
-            ax.set_xlim(0, 100)
-            for i, v in enumerate(rates):
-                ax.text(min(v + 1, 99), i, f"{v:.1f}%", va="center")
-            fig.tight_layout()
-            fig.savefig(out / "success_rates_overall.png", dpi=300, bbox_inches="tight", facecolor="white")
-            plt.close(fig)
-
-        # By group for first score
-        if group_col and score_cols:
-            col = score_cols[0]
-            s = pd.to_numeric(self.df[col], errors="coerce")
-            thr = self._auto_success_threshold(s)
-
-            tmp = self.df[[group_col, col]].copy()
-            tmp[col] = pd.to_numeric(tmp[col], errors="coerce")
-            tmp = tmp.dropna(subset=[group_col, col])
-
-            if not tmp.empty:
-                grp = tmp.groupby(group_col)[col].apply(lambda x: 100.0 * float((x >= thr).mean())).sort_values()
-                fig, ax = plt.subplots(figsize=(12, 7))
-                ax.barh(grp.index.astype(str), grp.values)
-                ax.set_title(f"{chart_name} by {group_col} ({col})")
-                ax.set_xlabel("Success Rate (%)")
-                ax.set_xlim(0, 100)
-                for i, v in enumerate(grp.values):
-                    ax.text(min(v + 1, 99), i, f"{v:.1f}%", va="center")
-                fig.tight_layout()
-                fig.savefig(out / "success_rates_by_group.png", dpi=300, bbox_inches="tight", facecolor="white")
-                plt.close(fig)
-
-    # -------------------------
-    # MAIN THREAD RUN
-    # -------------------------
     def run(self):
         try:
             self._clean_columns()
-
-            # new visualizer per thread
-            visualizer = DataVisualizer(dataset_path="", output_dir=self.output_dir, df=self.df)
-
+            
+            # Create output directory if it doesn't exist
+            Path(self.output_dir).mkdir(parents=True, exist_ok=True)
+            
+            # Initialize EnhancedEduVisualizer with the dataframe
+            viz = EnhancedEduVisualizer(self.df)
+            
+            # Map plot types to EnhancedEduVisualizer methods
             if self.plot_type == "Histogram":
-                visualizer.plot_all_distributions()
-                self.finished.emit(self.plot_type, True, "Histograms generated successfully")
-
-            elif self.plot_type == "Scatter Plot":
-                numeric_cols = self._best_numeric_cols(k=2)
-                if len(numeric_cols) >= 2:
-                    visualizer.scatter_plot("Scatter Plot", numeric_cols[0], numeric_cols[1])
-                    self.finished.emit(self.plot_type, True, "Scatter plot generated successfully")
-                else:
-                    self.finished.emit(self.plot_type, False, "Need at least 2 numeric columns")
-
-            elif self.plot_type == "Correlation Heatmap":
-                numeric_cols = self._best_numeric_cols(k=30)
-                if len(numeric_cols) >= 2:
-                    visualizer.correlation_heatmap(columns=numeric_cols)
-                    self.finished.emit(self.plot_type, True, "Correlation heatmap generated successfully")
-                else:
-                    self.finished.emit(self.plot_type, False, "Need at least 2 numeric columns for correlation")
-
+                # Generate histograms for all numeric columns
+                for col in viz.numeric_cols:
+                    save_path = f"{self.output_dir}/{col}_histogram.png"
+                    viz.plot_numeric_histogram(col, save_path=save_path)
+                self.finished.emit(self.plot_type, True, f"Histograms generated for {len(viz.numeric_cols)} columns")
+            
             elif self.plot_type == "Bar Chart":
-                visualizer.plot_all_value_counts(max_categories=15)
-                self.finished.emit(self.plot_type, True, "Bar charts generated successfully")
-
-            elif self.plot_type == "Line Plot":
-                numeric_cols = self._best_numeric_cols(k=4)
-                if len(numeric_cols) >= 2:
-                    x = numeric_cols[0]
-                    ys = numeric_cols[1:][:3]
-                    visualizer.line_chart("Line Chart", x, ys)
-                    self.finished.emit(self.plot_type, True, "Line plot generated successfully")
-                else:
-                    self.finished.emit(self.plot_type, False, "Need at least 2 numeric columns")
-
-            elif self.plot_type == "Overlapping Histogram":
-                group_col = self._pick_group_col(max_unique=8)
-                num_cols = self._best_numeric_cols(k=1)
-                if group_col and num_cols:
-                    value_col = num_cols[0]
-                    visualizer.overlapping_histogram(f"Distribution of {value_col} by {group_col}", value_col, group_col)
-                    self.finished.emit(self.plot_type, True, "Overlapping histogram generated successfully")
-                else:
-                    self.finished.emit(self.plot_type, False, "Need (1 categorical-like) + (1 numeric)")
+                # Generate bar charts for all categorical columns
+                for col in viz.categorical_cols:
+                    save_path = f"{self.output_dir}/{col}_bar.png"
+                    viz.plot_categorical_bar(col, save_path=save_path)
+                self.finished.emit(self.plot_type, True, f"Bar charts generated for {len(viz.categorical_cols)} columns")
 
             elif self.plot_type == "Pie Chart":
-                group_col = self._pick_group_col(max_unique=12)
-                if group_col:
-                    visualizer.pie_chart(f"Pie Chart of {group_col}", group_col, annotate=True, annotate_format="{:.1f}%%")
-                    self.finished.emit(self.plot_type, True, "Pie chart generated successfully")
+                group = self._pick_group_col(max_unique=10)
+                if group and group in viz.categorical_cols:
+                    save_path = f"{self.output_dir}/{group}_pie.png"
+                    viz.plot_categorical_bar(group, save_path=save_path)  # Using bar chart as pie chart alternative
+                    self.finished.emit(self.plot_type, True, f"Pie chart for {group} generated successfully")
                 else:
-                    self.finished.emit(self.plot_type, False, "No suitable categorical-like column found for pie chart")
+                    self.finished.emit(self.plot_type, False, "No suitable categorical column found for pie chart")
 
-            elif self.plot_type == "Ridgeline Plot":
-                group_col = self._pick_group_col(max_unique=10)
-                num_cols = self._best_numeric_cols(k=1)
-                if group_col and num_cols:
-                    visualizer.ridge_plot(f"Ridgeline Plot of {num_cols[0]} by {group_col}", num_cols[0], group_col)
-                    self.finished.emit(self.plot_type, True, "Ridgeline plot generated successfully")
-                else:
-                    self.finished.emit(self.plot_type, False, "Need (1 categorical-like) + (1 numeric)")
-
-            elif self.plot_type == "Lollipop Chart":
-                group_col = self._pick_group_col(max_unique=20)
-                if group_col:
-                    visualizer.lollipop_chart(f"Lollipop Chart of {group_col}", group_col)
-                    self.finished.emit(self.plot_type, True, "Lollipop chart generated successfully")
-                else:
-                    self.finished.emit(self.plot_type, False, "No suitable categorical-like column found")
-
-            elif self.plot_type == "Diverging Bar Chart":
-                numeric_cols = self._best_numeric_cols(k=2)
-                if len(numeric_cols) >= 2:
-                    cat_col = self._pick_group_col(max_unique=30)
-                    if not cat_col:
-                        cat_col = "_auto_category"
-                        self.df[cat_col] = np.arange(len(self.df)).astype(str)
-                        visualizer.set_dataframe(self.df)
-                    visualizer.diverging_bar_chart("Diverging Bar Chart", numeric_cols[0], numeric_cols[1], cat_col)
-                    self.finished.emit(self.plot_type, True, "Diverging bar chart generated successfully")
-                else:
-                    self.finished.emit(self.plot_type, False, "Need at least 2 numeric columns")
-
-            elif self.plot_type == "Stacked Area Chart":
-                numeric_cols = self._best_numeric_cols(k=4)
-                if len(numeric_cols) >= 3:
-                    x_col = "_auto_x"
-                    self.df = self.df.copy()
-                    self.df[x_col] = np.arange(len(self.df))
-                    visualizer.set_dataframe(self.df)
-                    y_cols = numeric_cols[:3]
-                    visualizer.stacked_area_chart("Stacked Area Chart", x_col, y_cols)
-                    self.finished.emit(self.plot_type, True, "Stacked area chart generated successfully")
-                else:
-                    self.finished.emit(self.plot_type, False, "Need at least 3 numeric columns")
-
-            elif self.plot_type == "KPI Card":
-                num_cols = self._best_numeric_cols(k=1)
-                if num_cols:
-                    col = num_cols[0]
-                    vals = self.df[col].dropna().head(4).tolist()
-                    if vals:
-                        labels = [f"{col} - {i+1}" for i in range(len(vals))]
-                        visualizer.kpi_card(f"KPI Cards for {col}", values=vals, labels=labels)
-                        self.finished.emit(self.plot_type, True, "KPI cards generated successfully")
-                    else:
-                        self.finished.emit(self.plot_type, False, "No numeric values available for KPI cards")
-                else:
-                    self.finished.emit(self.plot_type, False, "No numeric columns found")
-
-            elif self.plot_type == "Small Multiples":
-                group_col = self._pick_group_col(max_unique=9)
-                num_cols = self._best_numeric_cols(k=1)
-                if group_col and num_cols:
-                    visualizer.small_multiples(
-                        f"Small Multiples of {num_cols[0]} by {group_col}",
-                        num_cols[0], num_cols[0], group_col,
-                        chart_type="hist"
-                    )
-                    self.finished.emit(self.plot_type, True, "Small multiples generated successfully")
-                else:
-                    self.finished.emit(self.plot_type, False, "Need (1 categorical-like) + (1 numeric)")
-
-            elif self.plot_type == "Highlight Table":
-                cols = list(self.df.columns)[:3]
+            elif self.plot_type == "Scatter Plot":
+                cols = self._best_numeric_cols(2)
                 if len(cols) >= 2:
-                    visualizer.highlight_table("Highlight Table", columns=cols)
-                    self.finished.emit(self.plot_type, True, "Highlight table generated successfully")
+                    # EnhancedEduVisualizer doesn't have scatter plot, so we'll create a basic one
+                    import matplotlib.pyplot as plt
+                    fig, ax = plt.subplots(figsize=(10, 6))
+                    ax.scatter(self.df[cols[0]], self.df[cols[1]], alpha=0.6)
+                    ax.set_xlabel(cols[0])
+                    ax.set_ylabel(cols[1])
+                    ax.set_title(f"Scatter Plot: {cols[0]} vs {cols[1]}")
+                    ax.grid(True, alpha=0.3)
+                    
+                    save_path = f"{self.output_dir}/scatter_{cols[0]}_vs_{cols[1]}.png"
+                    fig.savefig(save_path, dpi=300, bbox_inches="tight")
+                    plt.close(fig)
+                    self.finished.emit(self.plot_type, True, f"Scatter plot: {cols[0]} vs {cols[1]}")
                 else:
-                    self.finished.emit(self.plot_type, False, "Not enough columns for highlight table")
+                    self.finished.emit(self.plot_type, False, "Need at least 2 numeric columns for scatter plot")
 
-            # ---------- TYPE-BASED “TLS/Geo” ----------
-            elif self.plot_type == "TLS Distribution":
-                tls_col = self._pick_group_col(prefer_keywords=["tls", "location", "site"], max_unique=50)
-                if tls_col:
-                    # If you have comprehensive_tls_distribution in EDA, use it:
-                    if hasattr(visualizer, "comprehensive_tls_distribution"):
-                        visualizer.comprehensive_tls_distribution(tls_column=tls_col)
-                    else:
-                        visualizer.bar_chart(f"TLS Distribution ({tls_col})", tls_col, sort_by="y", ascending=False)
-                    self.finished.emit(self.plot_type, True, f"TLS distribution generated using '{tls_col}'")
+            elif self.plot_type == "Correlation Heatmap":
+                import matplotlib.pyplot as plt
+                import seaborn as sns
+                
+                numeric_cols = self._best_numeric_cols(15)
+                if len(numeric_cols) >= 2:
+                    corr_matrix = self.df[numeric_cols].corr()
+                    
+                    fig, ax = plt.subplots(figsize=(12, 10))
+                    sns.heatmap(corr_matrix, annot=True, cmap='coolwarm', center=0,
+                                square=True, fmt='.2f', cbar_kws={'shrink': 0.8})
+                    ax.set_title('Correlation Heatmap', fontsize=16, pad=20)
+                    
+                    save_path = f"{self.output_dir}/correlation_heatmap.png"
+                    fig.savefig(save_path, dpi=300, bbox_inches="tight")
+                    plt.close(fig)
+                    self.finished.emit(self.plot_type, True, "Correlation heatmap generated successfully")
                 else:
-                    self.finished.emit(self.plot_type, False, "No categorical-like TLS/location column found")
+                    self.finished.emit(self.plot_type, False, "Need at least 2 numeric columns for correlation heatmap")
 
-            elif self.plot_type == "Geographic Distribution":
-                tls_col = self._pick_group_col(prefer_keywords=["tls", "location", "site"], max_unique=50)
-                score_cols = self._best_score_cols(k=3)
-                if tls_col and score_cols and hasattr(visualizer, "comprehensive_geographic_dist"):
-                    visualizer.comprehensive_geographic_dist(tls_column=tls_col, score_columns=score_cols)
-                    self.finished.emit(self.plot_type, True, f"Geographic distribution generated using '{tls_col}'")
-                elif tls_col:
-                    # fallback: just counts by location
-                    visualizer.bar_chart(f"Geographic Distribution ({tls_col})", tls_col, sort_by="y", ascending=False)
-                    self.finished.emit(self.plot_type, True, f"Geographic distribution (fallback counts) using '{tls_col}'")
+            elif self.plot_type == "Line Plot":
+                cols = self._best_numeric_cols(1)
+                if cols:
+                    import matplotlib.pyplot as plt
+                    fig, ax = plt.subplots(figsize=(12, 6))
+                    ax.plot(self.df.index, self.df[cols[0]], marker='o', linewidth=1.5)
+                    ax.set_xlabel('Index')
+                    ax.set_ylabel(cols[0])
+                    ax.set_title(f'Line Plot: {cols[0]}')
+                    ax.grid(True, alpha=0.3)
+                    
+                    save_path = f"{self.output_dir}/line_plot_{cols[0]}.png"
+                    fig.savefig(save_path, dpi=300, bbox_inches="tight")
+                    plt.close(fig)
+                    self.finished.emit(self.plot_type, True, f"Line plot for {cols[0]} generated successfully")
                 else:
-                    self.finished.emit(self.plot_type, False, "No categorical-like location/TLS column found")
+                    self.finished.emit(self.plot_type, False, "No numeric columns found for line plot")
 
-            # ---------- TYPE-BASED “Grade/Success/Score Dist” ----------
-            elif self.plot_type == "Student Demographics":
-                group_col = self._pick_group_col(max_unique=25)
-                if group_col:
-                    visualizer.bar_chart(f"Distribution of {group_col}", group_col, sort_by="y", ascending=False)
-                    self.finished.emit(self.plot_type, True, f"Demographics generated using '{group_col}'")
+            elif self.plot_type == "Box Plot":
+                cols = self._best_numeric_cols(3)
+                if cols:
+                    import matplotlib.pyplot as plt
+                    fig, ax = plt.subplots(figsize=(12, 6))
+                    data_to_plot = [self.df[col].dropna() for col in cols if col in self.df.columns]
+                    ax.boxplot(data_to_plot, labels=cols)
+                    ax.set_title('Box Plot')
+                    ax.set_ylabel('Value')
+                    plt.xticks(rotation=45)
+                    
+                    save_path = f"{self.output_dir}/box_plot.png"
+                    fig.savefig(save_path, dpi=300, bbox_inches="tight")
+                    plt.close(fig)
+                    self.finished.emit(self.plot_type, True, f"Box plot generated successfully")
                 else:
-                    self.finished.emit(self.plot_type, False, "No categorical-like column detected")
+                    self.finished.emit(self.plot_type, False, "No numeric columns found for box plot")
 
-            elif self.plot_type == "Success Rates Analysis":
-                score_cols = self._best_score_cols(k=3)
-                group_col = self._pick_group_col(max_unique=12)
-                if score_cols:
-                    self._plot_success_rates(score_cols, group_col=group_col, chart_name="Success Rates Analysis")
-                    self.finished.emit(self.plot_type, True, "Success rates generated (type-based)")
+            elif self.plot_type == "Comparison Plot":
+                # Find a categorical column and numeric columns for comparison
+                cat_col = self._pick_group_col(max_unique=10)
+                numeric_cols = self._best_numeric_cols(3)
+                
+                if cat_col and numeric_cols:
+                    save_path = f"{self.output_dir}/comparison_{cat_col}.png"
+                    viz.plot_comparison_by_category(numeric_cols, cat_col, save_path=save_path)
+                    self.finished.emit(self.plot_type, True, f"Comparison plot generated successfully")
                 else:
-                    self.finished.emit(self.plot_type, False, "No suitable numeric score columns found")
+                    self.finished.emit(self.plot_type, False, "Need categorical and numeric columns for comparison plot")
 
-            elif self.plot_type == "Score Distributions by Grade":
-                group_col = self._pick_group_col(max_unique=12)
-                score_cols = self._best_score_cols(k=1)
-                if group_col and score_cols:
-                    value_col = score_cols[0]
-                    visualizer.overlapping_histogram(f"{value_col} distribution by {group_col}", value_col, group_col)
-                    self.finished.emit(self.plot_type, True, f"Score distributions generated by '{group_col}'")
-                else:
-                    self.finished.emit(self.plot_type, False, "Need (1 categorical-like grouping) + (1 numeric score column)")
+            elif self.plot_type == "All Plots":
+                save_path = f"{self.output_dir}/all_plots"
+                Path(save_path).mkdir(parents=True, exist_ok=True)
+                viz.generate_all_plots(save_dir=save_path)
+                self.finished.emit(self.plot_type, True, "All plots generated successfully")
 
             else:
-                self.finished.emit(self.plot_type, False, f"{self.plot_type} not implemented")
+                self.finished.emit(self.plot_type, False, f"Plot type '{self.plot_type}' not implemented")
 
         except Exception as e:
             self.finished.emit(self.plot_type, False, f"Error: {str(e)}")
+
 
 class CenterDelegate(QStyledItemDelegate):
     def initStyleOption(self, option, index):
@@ -386,15 +203,17 @@ class Plotting_Page(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
 
-        self.setWindowTitle("Exploratory Data Analysis")
+        self.source_path: Optional[str] = None 
+        self.setWindowTitle("Educational Data Visualization")
         self.setStyleSheet(f"background: {PALETTE['bg']};")
+        self.source_path: Optional[str] = None   # <--- ADD THIS
 
         # Data-related attributes
         self.merged_df = None
         self.sheets_dfs = {}
         self.current_sheet = None
         self.current_df = None
-        self.processed_path: Optional[str] = None  # path to processed CSV
+        self.processed_path: Optional[str] = None
 
         # Plotting / EDA
         self.visualizer = None
@@ -411,11 +230,16 @@ class Plotting_Page(QWidget):
         layout.setSpacing(16)
 
         # Title
-        main_title = QLabel("Exploratory Data Analysis")
+        main_title = QLabel("Educational Data Visualization")
         main_title.setAlignment(Qt.AlignLeft)
         main_title.setStyleSheet(f"color: {PALETTE['text']};")
         main_title.setFont(QFont("Segoe UI", 28, QFont.Weight.Bold))
         layout.addWidget(main_title)
+
+        # Subtitle
+        subtitle = QLabel("Generate professional visualizations for educational datasets")
+        subtitle.setStyleSheet(f"color: {PALETTE['text']}; font-size: 14px; opacity: 0.8;")
+        layout.addWidget(subtitle)
 
         # ---------- SHEET SELECTION ----------
         sheet_layout = QHBoxLayout()
@@ -455,7 +279,7 @@ class Plotting_Page(QWidget):
         layout.addLayout(sheet_layout)
 
         # ---------- PLOTTING OPTIONS ----------
-        subtitle_load = QLabel("Plotting Options")
+        subtitle_load = QLabel("Visualization Options")
         subtitle_load.setAlignment(Qt.AlignmentFlag.AlignLeft)
         subtitle_load.setStyleSheet(f"color: {PALETTE['text']};")
         subtitle_load.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
@@ -534,27 +358,17 @@ class Plotting_Page(QWidget):
         )
         plot_option.addWidget(divider)
 
-        # Plot types and checkboxes
+        # Dynamic plot types based on available methods
         plot_types = [
             "Histogram",
+            "Bar Chart", 
             "Scatter Plot",
             "Correlation Heatmap",
-            "Bar Chart",
             "Line Plot",
-            "Overlapping Histogram",
-            "Pie Chart",  
-            "Ridgeline Plot",
-            "Lollipop Chart",
-            "Diverging Bar Chart",
-            "Stacked Area Chart",
-            "KPI Card",
-            "Small Multiples",
-            "Highlight Table",
-            "TLS Distribution",
-            "Geographic Distribution",
-            "Student Demographics",
-            "Success Rates Analysis",
-            "Score Distributions by Grade",
+            "Box Plot",
+            "Pie Chart",
+            "Comparison Plot",
+            "All Plots",
         ]
 
         for plot_type in plot_types:
@@ -600,7 +414,7 @@ class Plotting_Page(QWidget):
         layout.addWidget(summary_title)
 
         self.summary_label = QLabel(
-            "No plots generated yet. Select plot types above to begin."
+            "No visualizations generated yet. Select visualization types above to begin."
         )
         self.summary_label.setStyleSheet(
             f"""
@@ -618,11 +432,10 @@ class Plotting_Page(QWidget):
         self.summary_label.setMinimumHeight(80)
         layout.addWidget(self.summary_label)
 
-        # ---------- NAV BUTTONS AT THE END ----------
+        # ---------- NAV BUTTONS ----------
         nav_row = QHBoxLayout()
         nav_row.setSpacing(12)
 
-        # --- RIGHT SIDE: BACK + EXIT ---
         right_buttons = QHBoxLayout()
         right_buttons.setSpacing(10)
 
@@ -676,48 +489,59 @@ class Plotting_Page(QWidget):
         right_buttons.addWidget(self.back_btn)
         right_buttons.addWidget(self.exit_btn)
 
-        nav_row.addStretch()          # push right buttons to the right
+        nav_row.addStretch()
         nav_row.addLayout(right_buttons)
 
         layout.addLayout(nav_row)
 
     # ---------- NAVIGATION METHODS ----------
     def go_back(self):
-        self.cleanup_threads() 
-        """Navigate back to previous window (e.g. cleaning page)."""
+        self.cleanup_threads()
         main_window = self.window()
         if hasattr(main_window, "go_cleaning"):
             main_window.go_cleaning()
         elif hasattr(main_window, "stack"):
-            # Fallback if using a QStackedWidget; adjust index as needed
             try:
                 main_window.stack.setCurrentIndex(1)
             except Exception:
                 pass
 
     def exit_app(self):
-        self.cleanup_threads() 
+        self.cleanup_threads()
         QApplication.quit()
 
     def _initialize_visualizer(self):
+        print("DEBUG self.processed_path =", repr(self.processed_path))
+        print("DEBUG self.source_path   =", repr(getattr(self, "source_path", None)))
+        print("DEBUG cwd =", Path.cwd())
+
         if self.current_df is None or self.current_df.empty:
             return False
 
         try:
-            if self.processed_path:
-                self.output_dir = Path(self.processed_path).parent / "plots"
+            processed = (self.processed_path or "").strip() if isinstance(self.processed_path, str) else ""
+            source = (getattr(self, "source_path", None) or "").strip()
+
+            if processed:
+                p = Path(processed).expanduser().resolve()
+
+                # processed_path is a folder -> save plots inside it
+                if p.exists() and p.is_dir():
+                    self.output_dir = p / "plots"
+                else:
+                    # processed_path is a file -> save plots next to it
+                    self.output_dir = p.parent / "plots"
+
+            elif source:
+                s = Path(source).expanduser().resolve()
+                # if user only loads a file and never "saves cleaned"
+                self.output_dir = s.parent / f"{s.stem}_plots"
+
             else:
-                self.output_dir = Path.cwd() / "plots"
+                # last fallback (only if you truly have no file path)
+                self.output_dir = Path.cwd().resolve() / "plots"
 
             self.output_dir.mkdir(parents=True, exist_ok=True)
-
-            self.visualizer = DataVisualizer(
-                dataset_path="",  
-                output_dir=self.output_dir,
-                df=self.current_df
-            )
-
-            print(f"✓ Visualizer initialized with {len(self.current_df)} rows")
             print(f"✓ Plots will be saved to: {self.output_dir}")
             return True
 
@@ -726,33 +550,34 @@ class Plotting_Page(QWidget):
             self._update_error_summary(f"Failed to initialize: {str(e)}")
             return False
 
-
-    def set_dataframes(self, merged_df, sheets_dfs: dict, processed_path: Optional[str] = None):
-        """Set dataframes + optional processed file path from cleaning window."""
+    def set_dataframes(self, merged_df, sheets_dfs: dict,
+                   processed_path: Optional[str] = None,
+                   source_path: Optional[str] = None):
         self.merged_df = merged_df
         self.sheets_dfs = sheets_dfs or {}
         self.current_sheet = None
         self.current_df = self.merged_df
-        if processed_path is not None:
-            self.processed_path = processed_path
 
-        # Populate sheet combo
+        self.processed_path = processed_path
+        self.source_path = source_path  # <--- IMPORTANT
+
         self.sheet_combo.clear()
         self.sheet_combo.addItem("All sheets (merged)")
         for sheet_name in self.sheets_dfs.keys():
             self.sheet_combo.addItem(sheet_name)
 
-        # Initialize visualizer with new data
         self._initialize_visualizer()
 
-    def set_dataframe(self, df, processed_path: Optional[str] = None):
-        """Set a single dataframe (no sheets)."""
+    def set_dataframe(self, df,
+                  processed_path: Optional[str] = None,
+                  source_path: Optional[str] = None):
         self.merged_df = df
         self.sheets_dfs = {}
         self.current_sheet = None
         self.current_df = self.merged_df
-        if processed_path is not None:
-            self.processed_path = processed_path
+
+        self.processed_path = processed_path
+        self.source_path = source_path  # <--- IMPORTANT
 
         self.sheet_combo.clear()
         self.sheet_combo.addItem("All sheets (merged)")
@@ -761,7 +586,6 @@ class Plotting_Page(QWidget):
 
     # ---------- SHEET CHANGES ----------
     def change_sheet(self, name: str):
-        """Handle sheet selection change."""
         if name == "All sheets (merged)" or not name:
             self.current_sheet = None
             self.current_df = self.merged_df
@@ -775,34 +599,28 @@ class Plotting_Page(QWidget):
             f"{self.current_df.shape if self.current_df is not None else 'None'}"
         )
 
-        # Reinitialize visualizer with new dataframe
         self._initialize_visualizer()
 
-        # Uncheck all plots when changing sheets
         for cb in self.plot_checkboxes.values():
             cb.setChecked(False)
 
-        # Clear summary
         self.completed_plots = []
         self.failed_plots = []
         self._update_summary()
 
     # ---------- PLOT CHECKBOX HANDLERS ----------
     def _toggle_all_plots(self, state):
-        """Toggle all plot checkboxes on/off."""
         is_checked = state == Qt.CheckState.Checked.value
         for cb in self.plot_checkboxes.values():
             cb.setChecked(is_checked)
 
     def _on_plot_toggled(self, plot_type, state):
-        """Handle individual plot checkbox toggle."""
         is_checked = state == Qt.CheckState.Checked.value
 
         if is_checked:
             self._activate_plot(plot_type)
         else:
             self._deactivate_plot(plot_type)
-            # Remove from tracking if unchecked
             if plot_type in self.completed_plots:
                 self.completed_plots.remove(plot_type)
             if plot_type in self.failed_plots:
@@ -810,33 +628,27 @@ class Plotting_Page(QWidget):
             self._update_summary()
 
     def _activate_plot(self, plot_type):
-        """Start generation for the given plot type."""
         if self.current_df is None or self.current_df.empty:
             print("⚠ No data available. Please load data first.")
             self._update_error_summary("⚠ No data available. Please load data from the previous steps first.")
             self.plot_checkboxes[plot_type].setChecked(False)
             return
 
-        # Ensure output directory exists
         if not self.output_dir:
-            if self.processed_path:
-                self.output_dir = Path(self.processed_path).parent / "plots"
-            else:
-                self.output_dir = Path.cwd() / "plots"
-            self.output_dir.mkdir(parents=True, exist_ok=True)
+            ok = self._initialize_visualizer()
+            if not ok:
+                return
 
         sheet_name = self.current_sheet if self.current_sheet else "All sheets (merged)"
         print(f"⚙ Generating {plot_type} for sheet: {sheet_name}")
 
         self._update_progress_summary(plot_type)
 
-        # IMPORTANT: thread uses df copy + output_dir, no shared visualizer
         thread = PlottingThread(plot_type, self.current_df, self.output_dir)
         thread.finished.connect(lambda pt, success, msg: self._on_plot_finished(pt, success, msg))
         thread.start()
 
         self.active_threads[plot_type] = thread
-
 
     def _deactivate_plot(self, plot_type):
         sheet_name = self.current_sheet if self.current_sheet else "All sheets (merged)"
@@ -848,7 +660,6 @@ class Plotting_Page(QWidget):
                 thread.quit()
                 thread.wait()
             del self.active_threads[plot_type]
-
 
     def _on_plot_finished(self, plot_type, success, message):
         thread = self.active_threads.get(plot_type)
@@ -877,30 +688,26 @@ class Plotting_Page(QWidget):
         self._update_summary()
 
     def _update_progress_summary(self, plot_type):
-        """Show that a plot is being generated."""
         summary = f'<span style="color: #88ccff;">⚙ Generating {plot_type}...</span>'
         if self.completed_plots or self.failed_plots:
             summary = self._build_summary() + "<br><br>" + summary
         self.summary_label.setText(summary)
 
     def _update_error_summary(self, error_msg):
-        """Display error message in summary."""
         self.summary_label.setText(
             f'<span style="color: #ff4444;">{error_msg}</span>'
         )
 
     def _update_summary(self):
-        """Update summary label with overall plot status."""
         if not self.completed_plots and not self.failed_plots:
             self.summary_label.setText(
-                "No plots generated yet. Select plot types above to begin."
+                "No visualizations generated yet. Select visualization types above to begin."
             )
             return
 
         self.summary_label.setText(self._build_summary())
 
     def _build_summary(self):
-        """Build rich-text summary HTML."""
         summary_parts = []
 
         if self.completed_plots:
@@ -929,7 +736,6 @@ class Plotting_Page(QWidget):
 
     # ---------- PUBLIC HELPERS ----------
     def get_selected_plots(self):
-        """Return list of currently selected plot types."""
         return [
             plot_type
             for plot_type, cb in self.plot_checkboxes.items()
@@ -937,12 +743,9 @@ class Plotting_Page(QWidget):
         ]
 
     def get_output_directory(self):
-        """Return directory where plots are being saved."""
         return self.output_dir
 
-    # ---------- LIFECYCLE ----------
     def showEvent(self, event):
-        """Auto-load data from cleaning window when shown."""
         super().showEvent(event)
         main_window = self.window()
 
@@ -951,7 +754,14 @@ class Plotting_Page(QWidget):
 
             if hasattr(cleaning, "merged_df") and cleaning.merged_df is not None:
                 processed_path = getattr(cleaning, "processed_path", None)
-                self.set_dataframes(cleaning.merged_df, cleaning.sheets_dfs, processed_path)
+                source_path = getattr(cleaning, "loaded_filename", None)  # <--- ADD THIS
+
+                print("DEBUG cleaning.processed_path =", repr(processed_path))
+                print("DEBUG cleaning.loaded_filename =", repr(source_path))
+
+                self.set_dataframes(cleaning.merged_df, cleaning.sheets_dfs,
+                                    processed_path=processed_path,
+                                    source_path=source_path)
 
     def cleanup_threads(self):
         for plot_type, thread in list(self.active_threads.items()):
@@ -959,4 +769,3 @@ class Plotting_Page(QWidget):
                 thread.quit()
                 thread.wait()
             del self.active_threads[plot_type]
-

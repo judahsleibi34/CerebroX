@@ -1,7 +1,7 @@
 from dataset_loading import Data_set
 from data_preperation import Data_analysis
 from EDA import data_visualisation
-from sorting_conditons import sorting_criteria
+# from sorting_conditons import sorting_criteria
 
 from config import (
     Old_file, New_file, sheets, SUBJECT_FINAL_COLS, 

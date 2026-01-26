@@ -21,7 +21,8 @@ from home_page import LandingPage
 from loading_page import DatasetLoding_Window
 from ploting_page import Plotting_Page
 from cleaning_page import DatasetCleaning_Window
-from database import CerebroXDB   
+from database import CerebroXDB  
+
 
 class CenterDelegate(QStyledItemDelegate):
     def initStyleOption(self, option, index):

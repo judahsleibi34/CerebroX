@@ -14,7 +14,6 @@ import sys
 
 
 def get_app_root():
-
     if hasattr(sys, "_MEIPASS"):
         return Path(sys.executable).parent
     else:
@@ -33,6 +32,7 @@ def get_log_file():
             json.dump([], f, indent=4)
 
     return log_path
+
 
 class CerebroXDB:
     def __init__(self,
@@ -88,15 +88,61 @@ class CerebroXDB:
 
         return version + 1
 
+    def truncate_column_names(self, df: pd.DataFrame, max_length=64) -> pd.DataFrame:
+        """
+        Truncate column names to MySQL's 64-character identifier limit.
+        Adds a hash suffix to ensure uniqueness.
+        """
+        df2 = df.copy()
+        new_columns = []
+        
+        for col in df2.columns:
+            col_str = str(col)
+            if len(col_str) > max_length:
+                # Create hash for uniqueness
+                hash_suffix = hashlib.sha1(col_str.encode()).hexdigest()[:6]
+                # Truncate and add hash
+                truncated = col_str[:max_length - 7]  # Leave room for _hash
+                new_name = f"{truncated}_{hash_suffix}"
+                print(f"[DB] Column truncated: '{col_str[:50]}...' -> '{new_name}'")
+                new_columns.append(new_name)
+            else:
+                new_columns.append(col_str)
+        
+        df2.columns = new_columns
+        return df2
+
     def save_table(self, df: pd.DataFrame, table_name: str):
         if df.empty:
             raise ValueError(f"Cannot save empty DataFrame to {table_name}")
 
         df2 = df.copy()
 
+        # ✅ STEP 1: Truncate long column names FIRST (MySQL 64-char limit)
+        df2 = self.truncate_column_names(df2, max_length=64)
+
+        # ✅ STEP 2: Handle duplicate columns
+        if df2.columns.duplicated().any():
+            dupes = df2.columns[df2.columns.duplicated()].tolist()
+            print("[DB] Duplicate columns detected:", dupes)
+
+            seen = {}
+            new_cols = []
+            for c in df2.columns:
+                c = str(c)
+                if c not in seen:
+                    seen[c] = 0
+                    new_cols.append(c)
+                else:
+                    seen[c] += 1
+                    new_cols.append(f"{c}__{seen[c]}")
+            df2.columns = new_cols
+
+        # ✅ STEP 3: Convert object columns to string
         for col in df2.select_dtypes(include=["object"]).columns:
             df2[col] = df2[col].astype(str)
 
+        # ✅ STEP 4: Map dtypes for SQL
         dtype_map = {}
         for col in df2.columns:
             dtype = str(df2[col].dtype)
@@ -109,6 +155,7 @@ class CerebroXDB:
             else:
                 dtype_map[col] = Text
 
+        # ✅ STEP 5: Save to database
         df2.to_sql(
             table_name,
             self.engine,
@@ -118,6 +165,7 @@ class CerebroXDB:
             method="multi",
             chunksize=1000
         )
+        print(f"[DB] ✅ Table '{table_name}' saved successfully with {len(df2)} rows and {len(df2.columns)} columns")
 
     def save_run(self, filename: str, merged_df: pd.DataFrame, sheets: dict):
         clean_file = self.sanitize(Path(filename).stem)
@@ -127,6 +175,7 @@ class CerebroXDB:
 
         created_tables = []
 
+        # Save merged dataframe
         if merged_df is not None:
             raw_name = f"{base_name}_merged_v{version}"
             table_name = self._shorten_name(raw_name)
@@ -135,6 +184,7 @@ class CerebroXDB:
             self.save_table(merged_df, table_name)
             created_tables.append(table_name)
 
+        # Save individual sheets
         for sheet_name, df in sheets.items():
             if df is None or df.empty:
                 continue
@@ -175,12 +225,11 @@ class CerebroXDB:
             json.dump(data, f, indent=4)
 
     def _shorten_name(self, name: str, max_length=60) -> str:
+        """Shorten table names to avoid MySQL limits"""
         name = name.lower().replace(" ", "_")
         if len(name) <= max_length:
             return name
 
         hash_suffix = hashlib.sha1(name.encode()).hexdigest()[:8]
-
         prefix = name[:max_length - 9]  
         return f"{prefix}_{hash_suffix}"
-

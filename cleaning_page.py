@@ -916,7 +916,8 @@ class DatasetCleaning_Window(QWidget):
         main_window.plotting.set_dataframes(
             self.merged_df,
             self.sheets_dfs,
-            self.processed_path
+            processed_path=self.processed_path,
+            source_path=self.loaded_filename
         )
 
         main_window.stack.setCurrentWidget(main_window.plotting)
